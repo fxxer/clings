@@ -37,6 +37,9 @@ public protocol ThingsClientProtocol: Sendable {
     func fetchTags() async throws -> [Tag]
     func fetchHeadings(projectId: String) async throws -> [Heading]
 
+    // Recent
+    func fetchRecent(since: Date) async throws -> [Todo]
+
     // Single item
     func fetchTodo(id: String) async throws -> Todo
 
@@ -150,6 +153,13 @@ public actor ThingsClient: ThingsClientProtocol {
     public func fetchHeadings(projectId: String) async throws -> [Heading] {
         // Headings are not accessible via JXA — requires SQLite (HybridThingsClient).
         throw ThingsError.invalidState("fetchHeadings requires SQLite access (HybridThingsClient)")
+    }
+
+    // MARK: - Recent
+
+    public func fetchRecent(since: Date) async throws -> [Todo] {
+        // JXA-only client does not support fetchRecent; requires SQLite (HybridThingsClient)
+        throw ThingsError.invalidState("fetchRecent requires SQLite access (HybridThingsClient)")
     }
 
     // MARK: - Single Item

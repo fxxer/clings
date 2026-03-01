@@ -41,6 +41,10 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         try database.fetchTodo(id: id)
     }
 
+    public func fetchRecent(since: Date) async throws -> [Todo] {
+        try database.fetchRecent(since: since)
+    }
+
     public func search(query: String) async throws -> [Todo] {
         try database.search(query: query)
     }

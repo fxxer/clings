@@ -36,6 +36,8 @@ struct Clings: AsyncParsableCommand {
             AnytimeCommand.self,
             SomedayCommand.self,
             LogbookCommand.self,
+            TrashCommand.self,
+            RecentCommand.self,
 
             // List meta
             ProjectsCommand.self,

@@ -104,6 +104,11 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         return todo
     }
 
+    func fetchRecent(since: Date) async throws -> [Todo] {
+        if let error = errorToThrow { throw error }
+        return searchResults
+    }
+
     func createTodo(
         name: String,
         notes: String?,

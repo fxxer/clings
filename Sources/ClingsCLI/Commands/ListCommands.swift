@@ -279,4 +279,95 @@ struct AreasCommand: AsyncParsableCommand {
     }
 }
 
+// MARK: - Recent Command
+
+struct RecentCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "recent",
+        abstract: "Show recently created todos",
+        discussion: """
+        Displays todos created within the specified time period.
+        Excludes completed and trashed todos.
+
+        PERIOD FORMAT:
+          3d   = last 3 days
+          1w   = last week
+          2m   = last 2 months
+
+        EXAMPLES:
+          clings recent           Show todos created in the last 7 days (default)
+          clings recent 3d        Show todos created in the last 3 days
+          clings recent 1w        Show todos created in the last week
+          clings recent --json    Output as JSON
+
+        SEE ALSO:
+          today, logbook, filter
+        """
+    )
+
+    @Argument(help: "Time period (e.g. 3d, 1w, 2m). Default: 7d")
+    var period: String = "7d"
+
+    @OptionGroup var output: OutputOptions
+
+    func run() async throws {
+        guard let since = parsePeriod(period) else {
+            throw ThingsError.invalidState("Invalid period '\(period)'. Use format: 3d, 1w, 2m")
+        }
+
+        let client = ThingsClientFactory.create()
+        let todos = try await client.fetchRecent(since: since)
+
+        let formatter: OutputFormatter = output.json
+            ? JSONOutputFormatter()
+            : TextOutputFormatter(useColors: !output.noColor)
+
+        if output.json {
+            print(formatter.format(todos: todos, list: "Recent"))
+        } else {
+            print(formatter.format(todos: todos))
+        }
+    }
+
+    private func parsePeriod(_ str: String) -> Date? {
+        let lower = str.lowercased()
+        let calendar = Calendar.current
+        let now = Date()
+
+        if lower.hasSuffix("d"), let n = Int(lower.dropLast()) {
+            return calendar.date(byAdding: .day, value: -n, to: now)
+        }
+        if lower.hasSuffix("w"), let n = Int(lower.dropLast()) {
+            return calendar.date(byAdding: .weekOfYear, value: -n, to: now)
+        }
+        if lower.hasSuffix("m"), let n = Int(lower.dropLast()) {
+            return calendar.date(byAdding: .month, value: -n, to: now)
+        }
+        return nil
+    }
+}
+
+// MARK: - Trash Command
+
+struct TrashCommand: ListCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "trash",
+        abstract: "Show trashed todos",
+        discussion: """
+        Displays todos that have been moved to the trash in Things 3.
+
+        EXAMPLES:
+          clings trash                  Show trashed todos
+          clings trash --json           Output as JSON
+
+        SEE ALSO:
+          delete, logbook
+        """
+    )
+
+    @OptionGroup var output: OutputOptions
+
+    var listView: ListView { .trash }
+}
+
 // Note: TagsCommand moved to TagCommands.swift to support subcommands (add, delete, rename)
