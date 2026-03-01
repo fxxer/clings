@@ -12,6 +12,7 @@ public protocol OutputFormatter {
     func format(projects: [Project]) -> String
     func format(areas: [Area]) -> String
     func format(tags: [Tag]) -> String
+    func format(headings: [Heading]) -> String
     func format(todo: Todo) -> String
     func format(message: String) -> String
     func format(error: Error) -> String
@@ -64,6 +65,11 @@ public struct JSONOutputFormatter: OutputFormatter {
 
     public func format(tags: [Tag]) -> String {
         let response = TagListResponse(count: tags.count, items: tags)
+        return encode(response)
+    }
+
+    public func format(headings: [Heading]) -> String {
+        let response = HeadingListResponse(count: headings.count, items: headings)
         return encode(response)
     }
 
@@ -146,6 +152,14 @@ public struct TextOutputFormatter: OutputFormatter {
         }
 
         return tags.map { cyan("#\($0.name)") }.joined(separator: "\n")
+    }
+
+    public func format(headings: [Heading]) -> String {
+        if headings.isEmpty {
+            return dim("No headings found")
+        }
+
+        return headings.map { "— \(bold($0.title))  \(dim($0.id))" }.joined(separator: "\n")
     }
 
     public func format(todo: Todo) -> String {
@@ -435,6 +449,28 @@ struct TagJSON: Encodable {
     init(from tag: Tag) {
         self.id = tag.id
         self.name = tag.name
+    }
+}
+
+struct HeadingListResponse: Encodable {
+    let count: Int
+    let items: [HeadingJSON]
+
+    init(count: Int, items: [Heading]) {
+        self.count = count
+        self.items = items.map { HeadingJSON(from: $0) }
+    }
+}
+
+struct HeadingJSON: Encodable {
+    let id: String
+    let title: String
+    let projectId: String
+
+    init(from heading: Heading) {
+        self.id = heading.id
+        self.title = heading.title
+        self.projectId = heading.projectId
     }
 }
 

@@ -33,6 +33,10 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         try database.fetchTags()
     }
 
+    public func fetchHeadings(projectId: String) async throws -> [Heading] {
+        try database.fetchHeadings(projectId: projectId)
+    }
+
     public func fetchTodo(id: String) async throws -> Todo {
         try database.fetchTodo(id: id)
     }
@@ -53,8 +57,8 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
-        let whenStr = when.map { appleScriptDateString($0) }
-        let deadlineStr = deadline.map { appleScriptDateString($0) }
+        let whenStr = when.map { iso8601DateString($0) }
+        let deadlineStr = deadline.map { iso8601DateString($0) }
 
         let script = JXAScripts.createTodo(
             name: name,
@@ -67,9 +71,9 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             checklistItems: checklistItems
         )
 
-        let id = try await jxaBridge.executeAppleScript(script)
-        guard !id.isEmpty else {
-            throw ThingsError.operationFailed("Missing created todo ID")
+        let result = try await jxaBridge.executeJSON(script, as: CreationResult.self)
+        guard result.success, let id = result.id, !id.isEmpty else {
+            throw ThingsError.operationFailed(result.error ?? "Missing created todo ID")
         }
 
         if !tags.isEmpty {
@@ -212,11 +216,9 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 
-    private func appleScriptDateString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
-        formatter.dateFormat = "MMMM d, yyyy HH:mm:ss"
+    private func iso8601DateString(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
         return formatter.string(from: date)
     }
 }

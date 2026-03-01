@@ -91,6 +91,11 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         return tags
     }
 
+    func fetchHeadings(projectId: String) async throws -> [Heading] {
+        if let error = errorToThrow { throw error }
+        return []
+    }
+
     func fetchTodo(id: String) async throws -> Todo {
         if let error = errorToThrow { throw error }
         guard let todo = todoById[id] else {

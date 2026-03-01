@@ -30,6 +30,7 @@ struct ProjectCommand: AsyncParsableCommand {
         subcommands: [
             ProjectListCommand.self,
             ProjectAddCommand.self,
+            ProjectHeadingsCommand.self,
         ],
         defaultSubcommand: ProjectListCommand.self
     )
@@ -143,5 +144,39 @@ struct ProjectAddCommand: AsyncParsableCommand {
             return date
         }
         throw ThingsError.invalidState("Invalid date format: \(str). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
+    }
+}
+
+// MARK: - Project Headings Command
+
+struct ProjectHeadingsCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "headings",
+        abstract: "List headings in a project",
+        discussion: """
+        Lists all headings defined in a project. Accepts project name or UUID.
+        Useful for scripting --heading values in 'add' and 'update' commands.
+
+        EXAMPLES:
+          clings project headings "Week #9"
+          clings project headings <uuid>
+          clings project headings "Week #9" --json
+        """
+    )
+
+    @Argument(help: "Project name or UUID")
+    var project: String
+
+    @OptionGroup var output: OutputOptions
+
+    func run() async throws {
+        let client = ThingsClientFactory.create()
+        let headings = try await client.fetchHeadings(projectId: project)
+
+        let formatter: OutputFormatter = output.json
+            ? JSONOutputFormatter()
+            : TextOutputFormatter(useColors: !output.noColor)
+
+        print(formatter.format(headings: headings))
     }
 }

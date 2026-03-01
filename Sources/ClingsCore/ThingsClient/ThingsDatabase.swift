@@ -225,6 +225,37 @@ public final class ThingsDatabase: Sendable {
         }
     }
 
+    /// Fetch all headings for a project (by UUID or name).
+    public func fetchHeadings(projectId: String) throws -> [Heading] {
+        let db = try openDatabase()
+
+        return try db.read { db in
+            // Resolve name → UUID if needed
+            let resolvedId: String
+            if projectId.contains(" ") || projectId.count < 20 {
+                // Looks like a name — try to resolve to UUID
+                let projectRow = try Row.fetchOne(db,
+                    sql: "SELECT uuid FROM TMTask WHERE title = ? AND type = 1 AND trashed = 0 LIMIT 1",
+                    arguments: [projectId])
+                resolvedId = projectRow?["uuid"] ?? projectId
+            } else {
+                resolvedId = projectId
+            }
+
+            let rows = try Row.fetchAll(db,
+                sql: """
+                    SELECT uuid, title FROM TMTask
+                    WHERE project = ? AND type = 2 AND trashed = 0
+                    ORDER BY "index"
+                    """,
+                arguments: [resolvedId])
+
+            return rows.map { row in
+                Heading(id: row["uuid"], title: row["title"], projectId: resolvedId)
+            }
+        }
+    }
+
     /// Fetch a single todo by ID.
     public func fetchTodo(id: String) throws -> Todo {
         let db = try openDatabase()

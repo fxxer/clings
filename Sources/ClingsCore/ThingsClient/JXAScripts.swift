@@ -310,39 +310,27 @@ public enum JXAScripts {
         checklistItems: [String] = []
     ) -> String {
         _ = tags  // Tags are applied separately via AppleScript.
-        let checklistArray = checklistItems.map { "\"\($0.appleScriptEscaped)\"" }.joined(separator: ", ")
 
-        var propsCode = "name: \"\(name.appleScriptEscaped)\""
-        if let notes = notes, !notes.isEmpty {
-            propsCode += ", notes: \"\(notes.appleScriptEscaped)\""
-        }
+        let checklistJS = checklistItems.isEmpty ? "" : """
+            const checklistItems = [\(checklistItems.map { "'\($0.jxaEscaped)'" }.joined(separator: ", "))];
+            checklistItems.forEach(function(itemName) {
+                app.make({ new: 'to do', withProperties: { name: itemName }, at: todo.toDos });
+            });
+            """
 
         return """
-        tell application "Things3"
-            set newTodo to make new to do with properties {\(propsCode)}
+        (() => {
+            const app = Application('Things3');
+            const props = { name: '\(name.jxaEscaped)'\(notes != nil ? ", notes: '\(notes!.jxaEscaped)'" : "")\(when != nil ? ", activationDate: new Date('\(when!.jxaEscaped)')" : "")\(deadline != nil ? ", dueDate: new Date('\(deadline!.jxaEscaped)')" : "") };
 
-            \(project != nil ? """
-            if exists project "\(project!.appleScriptEscaped)" then
-                set project of newTodo to project "\(project!.appleScriptEscaped)"
-            end if
-            """ : "")
+            const todo = app.make({ new: 'to do', withProperties: props });
 
-            \(area != nil ? """
-            if exists area "\(area!.appleScriptEscaped)" then
-                set area of newTodo to area "\(area!.appleScriptEscaped)"
-            end if
-            """ : "")
+            \(project != nil ? "const project = app.projects.byName('\(project!.jxaEscaped)'); if (project.exists()) { todo.project = project; }" : "")
+            \(area != nil ? "const area = app.areas.byName('\(area!.jxaEscaped)'); if (area.exists()) { todo.area = area; }" : "")
+            \(checklistJS)
 
-            \(when != nil ? "schedule newTodo for date \"\(when!.appleScriptEscaped)\"" : "")
-            \(deadline != nil ? "set due date of newTodo to date \"\(deadline!.appleScriptEscaped)\"" : "")
-
-            set checklistItems to {\(checklistArray)}
-            repeat with itemName in checklistItems
-                make new to do with properties {name:itemName} at newTodo
-            end repeat
-
-            return id of newTodo
-        end tell
+            return JSON.stringify({ success: true, id: todo.id(), name: todo.name() });
+        })()
         """
     }
 

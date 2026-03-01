@@ -35,6 +35,7 @@ public protocol ThingsClientProtocol: Sendable {
     func fetchProjects() async throws -> [Project]
     func fetchAreas() async throws -> [Area]
     func fetchTags() async throws -> [Tag]
+    func fetchHeadings(projectId: String) async throws -> [Heading]
 
     // Single item
     func fetchTodo(id: String) async throws -> Todo
@@ -146,6 +147,11 @@ public actor ThingsClient: ThingsClientProtocol {
         }
     }
 
+    public func fetchHeadings(projectId: String) async throws -> [Heading] {
+        // Headings are not accessible via JXA — requires SQLite (HybridThingsClient).
+        throw ThingsError.invalidState("fetchHeadings requires SQLite access (HybridThingsClient)")
+    }
+
     // MARK: - Single Item
 
     public func fetchTodo(id: String) async throws -> Todo {
@@ -183,8 +189,8 @@ public actor ThingsClient: ThingsClientProtocol {
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
-        let whenStr = when.map { appleScriptDateString($0) }
-        let deadlineStr = deadline.map { appleScriptDateString($0) }
+        let whenStr = when.map { iso8601DateString($0) }
+        let deadlineStr = deadline.map { iso8601DateString($0) }
 
         let script = JXAScripts.createTodo(
             name: name,
@@ -197,9 +203,9 @@ public actor ThingsClient: ThingsClientProtocol {
             checklistItems: checklistItems
         )
 
-        let id = try await bridge.executeAppleScript(script)
-        guard !id.isEmpty else {
-            throw ThingsError.operationFailed("Missing created todo ID")
+        let result = try await bridge.executeJSON(script, as: CreationResult.self)
+        guard result.success, let id = result.id, !id.isEmpty else {
+            throw ThingsError.operationFailed(result.error ?? "Missing created todo ID")
         }
 
         if !tags.isEmpty {
@@ -353,11 +359,9 @@ public actor ThingsClient: ThingsClientProtocol {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
 
-    private func appleScriptDateString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone.current
-        formatter.dateFormat = "MMMM d, yyyy HH:mm:ss"
+    private func iso8601DateString(_ date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
         return formatter.string(from: date)
     }
 }
