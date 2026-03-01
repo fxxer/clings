@@ -121,20 +121,19 @@ struct TaskParserTests {
         let parser = TaskParser()
 
         @Test func projectExtraction() {
-            let result = parser.parse("Write report for ProjectAlpha")
+            let result = parser.parse("Write report @ProjectAlpha")
             #expect(result.title == "Write report")
             #expect(result.project == "ProjectAlpha")
         }
 
         @Test func projectWithSpaces() {
-            let result = parser.parse("Task for Project Alpha")
-            // Pattern matches capitalized words after "for"
-            #expect(result.project == "Project Alpha")
+            let result = parser.parse("Task @ProjectAlpha")
+            #expect(result.project == "ProjectAlpha")
         }
 
-        @Test func projectLowercaseForIgnored() {
+        @Test func projectNotParsedWithoutAt() {
             let result = parser.parse("Looking for something")
-            // "something" is lowercase, so not matched as project
+            // No @ prefix, so not matched as project
             #expect(result.project == nil)
             #expect(result.title.contains("Looking for something"))
         }
@@ -284,7 +283,7 @@ struct TaskParserTests {
         }
 
         @Test func allFeaturesCombined() {
-            let result = parser.parse("Review docs for ProjectAlpha #work !high by friday // Check formatting")
+            let result = parser.parse("Review docs @ProjectAlpha #work !high by friday // Check formatting")
             #expect(result.title == "Review docs")
             #expect(result.project == "ProjectAlpha")
             #expect(result.tags == ["work"])
@@ -294,7 +293,7 @@ struct TaskParserTests {
         }
 
         @Test func complexTaskWithMultipleElements() {
-            let result = parser.parse("Write quarterly report for Finance #urgent #reporting !!! by monday - Executive summary - Data analysis - Conclusions // Q4 metrics")
+            let result = parser.parse("Write quarterly report @Finance #urgent #reporting !!! by monday - Executive summary - Data analysis - Conclusions // Q4 metrics")
             #expect(result.project == "Finance")
             #expect(result.tags.contains("urgent"))
             #expect(result.tags.contains("reporting"))

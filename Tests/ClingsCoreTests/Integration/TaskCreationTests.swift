@@ -113,17 +113,17 @@ struct TaskCreationTests {
     struct ProjectParsing {
         let parser = TaskParser()
 
-        @Test func projectAfterFor() {
-            let result = parser.parse("Update tests for MobileApp")
+        @Test func projectAfterAt() {
+            let result = parser.parse("Update tests @MobileApp")
 
             #expect(result.project == "MobileApp")
             #expect(result.title == "Update tests")
         }
 
-        @Test func projectWithSpaces() {
-            let result = parser.parse("Task for Project Alpha")
+        @Test func projectWithAt() {
+            let result = parser.parse("Task @ProjectAlpha")
 
-            #expect(result.project == "Project Alpha")
+            #expect(result.project == "ProjectAlpha")
         }
     }
 
