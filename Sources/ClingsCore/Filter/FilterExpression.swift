@@ -88,48 +88,7 @@ public enum FilterValue: Sendable, Equatable {
 
     /// Parse natural language dates like "today", "tomorrow", "next monday".
     private static func parseNaturalDate(_ input: String) -> Date? {
-        let lowercased = input.lowercased()
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-
-        switch lowercased {
-        case "today":
-            return today
-        case "tomorrow":
-            return calendar.date(byAdding: .day, value: 1, to: today)
-        case "yesterday":
-            return calendar.date(byAdding: .day, value: -1, to: today)
-        default:
-            break
-        }
-
-        // Check for ISO date (YYYY-MM-DD)
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        if let date = formatter.date(from: input) {
-            return date
-        }
-
-        // Check for relative days like "in 3 days"
-        if lowercased.hasPrefix("in ") && lowercased.hasSuffix(" days") {
-            let numberPart = lowercased.dropFirst(3).dropLast(5).trimmingCharacters(in: .whitespaces)
-            if let days = Int(numberPart) {
-                return calendar.date(byAdding: .day, value: days, to: today)
-            }
-        }
-
-        // Check for weekday names
-        let weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
-        if let targetWeekday = weekdays.firstIndex(of: lowercased) {
-            let todayWeekday = calendar.component(.weekday, from: today) - 1 // 0-based
-            var daysToAdd = targetWeekday - todayWeekday
-            if daysToAdd <= 0 {
-                daysToAdd += 7
-            }
-            return calendar.date(byAdding: .day, value: daysToAdd, to: today)
-        }
-
-        return nil
+        return DateParser.shared.parse(input)
     }
 }
 

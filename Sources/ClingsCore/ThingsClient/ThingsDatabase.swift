@@ -145,9 +145,7 @@ public final class ThingsDatabase: Sendable {
             }
 
             let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
-            return try rows.map { row in
-                try self.todoFromRow(row, db: db)
-            }
+            return try self.hydrateTodos(rows, db: db)
         }
     }
 
@@ -164,6 +162,14 @@ public final class ThingsDatabase: Sendable {
                 """
 
             let rows = try Row.fetchAll(db, sql: sql)
+            
+            // Bulk fetch related data
+            let projectIds = rows.map { $0["uuid"] as String }
+            let areaIds = rows.compactMap { $0["area"] as String? }
+            
+            let tagsByTask = try self.bulkFetchTags(taskIds: projectIds, db: db)
+            let areasById = try self.bulkFetchAreas(areaIds: areaIds, db: db)
+
             return try rows.map { row in
                 let uuid: String = row["uuid"]
                 let title: String = row["title"]
@@ -171,8 +177,8 @@ public final class ThingsDatabase: Sendable {
                 let statusInt: Int = row["status"]
                 let areaUuid: String? = row["area"]
 
-                let area: Area? = try areaUuid.flatMap { try self.fetchArea(uuid: $0, db: db) }
-                let tags = try self.fetchTagsForTask(uuid: uuid, db: db)
+                let area = areaUuid.flatMap { areasById[$0] }
+                let tags = tagsByTask[uuid] ?? []
 
                 let deadline: Date? = (row["deadline"] as Int?).flatMap {
                     Date(timeIntervalSinceReferenceDate: TimeInterval($0))
@@ -200,11 +206,14 @@ public final class ThingsDatabase: Sendable {
         return try db.read { db in
             let sql = "SELECT uuid, title FROM TMArea ORDER BY \"index\""
             let rows = try Row.fetchAll(db, sql: sql)
+            
+            let areaIds = rows.map { $0["uuid"] as String }
+            let tagsByArea = try self.bulkFetchTagsForAreas(areaIds: areaIds, db: db)
 
             return try rows.map { row in
                 let uuid: String = row["uuid"]
                 let title: String = row["title"]
-                let tags = try self.fetchTagsForArea(uuid: uuid, db: db)
+                let tags = tagsByArea[uuid] ?? []
 
                 return Area(id: uuid, name: title, tags: tags)
             }
@@ -272,7 +281,9 @@ public final class ThingsDatabase: Sendable {
                 throw ThingsError.notFound(id)
             }
 
-            return try self.todoFromRow(row, db: db)
+            // Hydrate the single row
+            let todos = try self.hydrateTodos([row], db: db)
+            return todos[0]
         }
     }
 
@@ -291,118 +302,184 @@ public final class ThingsDatabase: Sendable {
                 LIMIT 100
                 """
 
-            let pattern = "%\(query)%"
+            let pattern = "%\\(query)%"
             let rows = try Row.fetchAll(db, sql: sql, arguments: [pattern, pattern])
-            return try rows.map { row in
-                try self.todoFromRow(row, db: db)
+            return try self.hydrateTodos(rows, db: db)
+        }
+    }
+
+    // MARK: - Bulk Fetching & Hydration
+
+    private func hydrateTodos(_ rows: [Row], db: Database) throws -> [Todo] {
+        if rows.isEmpty { return [] }
+
+        // 1. Collect IDs
+        let todoIds = rows.map { $0["uuid"] as String }
+        let projectIds = rows.compactMap { $0["project"] as String? }
+        let areaIds = rows.compactMap { $0["area"] as String? }
+
+        // 2. Bulk fetch related data
+        let tagsByTodo = try bulkFetchTags(taskIds: todoIds, db: db)
+        let checklistByTodo = try bulkFetchChecklistItems(taskIds: todoIds, db: db)
+        let projectsById = try bulkFetchProjectsBasic(projectIds: projectIds, db: db)
+        let areasById = try bulkFetchAreas(areaIds: areaIds, db: db)
+
+        // 3. Map rows to Todo objects
+        return try rows.map { row in
+            let uuid: String = row["uuid"]
+            let title: String = row["title"]
+            let notes: String? = row["notes"]
+            let statusInt: Int = row["status"]
+            let projectUuid: String? = row["project"]
+            let areaUuid: String? = row["area"]
+
+            let project = projectUuid.flatMap { projectsById[$0] }
+            let area = areaUuid.flatMap { areasById[$0] }
+            let tags = tagsByTodo[uuid] ?? []
+            let checklistItems = checklistByTodo[uuid] ?? []
+
+            let deadline: Date? = (row["deadline"] as Int?).flatMap {
+                Date(timeIntervalSinceReferenceDate: TimeInterval($0))
             }
+            let creationDate: Date = (row["creationDate"] as Double?).flatMap {
+                Date(timeIntervalSinceReferenceDate: $0)
+            } ?? Date()
+            let modificationDate: Date = (row["userModificationDate"] as Double?).flatMap {
+                Date(timeIntervalSinceReferenceDate: $0)
+            } ?? creationDate
+
+            return Todo(
+                id: uuid,
+                name: title,
+                notes: notes,
+                status: statusFromInt(statusInt),
+                dueDate: deadline,
+                tags: tags,
+                project: project,
+                area: area,
+                checklistItems: checklistItems,
+                creationDate: creationDate,
+                modificationDate: modificationDate
+            )
         }
     }
 
-    // MARK: - Helper Methods
-
-    private func todoFromRow(_ row: Row, db: Database) throws -> Todo {
-        let uuid: String = row["uuid"]
-        let title: String = row["title"]
-        let notes: String? = row["notes"]
-        let statusInt: Int = row["status"]
-        let projectUuid: String? = row["project"]
-        let areaUuid: String? = row["area"]
-
-        let project: Project? = try projectUuid.flatMap { try self.fetchProjectBasic(uuid: $0, db: db) }
-        let area: Area? = try areaUuid.flatMap { try self.fetchArea(uuid: $0, db: db) }
-        let tags = try fetchTagsForTask(uuid: uuid, db: db)
-        let checklistItems = try fetchChecklistItems(uuid: uuid, db: db)
-
-        let deadline: Date? = (row["deadline"] as Int?).flatMap {
-            Date(timeIntervalSinceReferenceDate: TimeInterval($0))
-        }
-        let creationDate: Date = (row["creationDate"] as Double?).flatMap {
-            Date(timeIntervalSinceReferenceDate: $0)
-        } ?? Date()
-        let modificationDate: Date = (row["userModificationDate"] as Double?).flatMap {
-            Date(timeIntervalSinceReferenceDate: $0)
-        } ?? creationDate
-
-        return Todo(
-            id: uuid,
-            name: title,
-            notes: notes,
-            status: statusFromInt(statusInt),
-            dueDate: deadline,
-            tags: tags,
-            project: project,
-            area: area,
-            checklistItems: checklistItems,
-            creationDate: creationDate,
-            modificationDate: modificationDate
-        )
-    }
-
-    private func fetchProjectBasic(uuid: String, db: Database) throws -> Project? {
-        let sql = "SELECT title, status FROM TMTask WHERE uuid = ? AND type = 1"
-        guard let row = try Row.fetchOne(db, sql: sql, arguments: [uuid]) else {
-            return nil
-        }
-
-        return Project(
-            id: uuid,
-            name: row["title"],
-            notes: nil,
-            status: statusFromInt(row["status"]),
-            area: nil,
-            tags: [],
-            dueDate: nil,
-            creationDate: Date()
-        )
-    }
-
-    private func fetchArea(uuid: String, db: Database) throws -> Area? {
-        let sql = "SELECT title FROM TMArea WHERE uuid = ?"
-        guard let row = try Row.fetchOne(db, sql: sql, arguments: [uuid]) else {
-            return nil
-        }
-
-        return Area(id: uuid, name: row["title"], tags: [])
-    }
-
-    private func fetchTagsForTask(uuid: String, db: Database) throws -> [Tag] {
+    private func bulkFetchTags(taskIds: [String], db: Database) throws -> [String: [Tag]] {
+        if taskIds.isEmpty { return [:] }
+        
         let sql = """
-            SELECT tag.uuid, tag.title
+            SELECT tt.tasks, tag.uuid, tag.title
             FROM TMTaskTag AS tt
             JOIN TMTag AS tag ON tt.tags = tag.uuid
-            WHERE tt.tasks = ?
-            """
-        let rows = try Row.fetchAll(db, sql: sql, arguments: [uuid])
-        return rows.map { Tag(id: $0["uuid"], name: $0["title"]) }
+            WHERE tt.tasks IN (
+        """
+        
+        // GRDB handles array arguments efficiently
+        let placeholders = Array(repeating: "?", count: taskIds.count).joined(separator: ",")
+        let fullSql = sql + placeholders + ")"
+        
+        let rows = try Row.fetchAll(db, sql: fullSql, arguments: StatementArguments(taskIds))
+        
+        var result: [String: [Tag]] = [:]
+        for row in rows {
+            let taskId: String = row["tasks"]
+            let tag = Tag(id: row["uuid"], name: row["title"])
+            result[taskId, default: []].append(tag)
+        }
+        return result
     }
-
-    private func fetchTagsForArea(uuid: String, db: Database) throws -> [Tag] {
+    
+    private func bulkFetchTagsForAreas(areaIds: [String], db: Database) throws -> [String: [Tag]] {
+        if areaIds.isEmpty { return [:] }
+        
         let sql = """
-            SELECT tag.uuid, tag.title
+            SELECT at.areas, tag.uuid, tag.title
             FROM TMAreaTag AS at
             JOIN TMTag AS tag ON at.tags = tag.uuid
-            WHERE at.areas = ?
-            """
-        let rows = try Row.fetchAll(db, sql: sql, arguments: [uuid])
-        return rows.map { Tag(id: $0["uuid"], name: $0["title"]) }
+            WHERE at.areas IN (
+        """
+        
+        let placeholders = Array(repeating: "?", count: areaIds.count).joined(separator: ",")
+        let fullSql = sql + placeholders + ")"
+        
+        let rows = try Row.fetchAll(db, sql: fullSql, arguments: StatementArguments(areaIds))
+        
+        var result: [String: [Tag]] = [:]
+        for row in rows {
+            let areaId: String = row["areas"]
+            let tag = Tag(id: row["uuid"], name: row["title"])
+            result[areaId, default: []].append(tag)
+        }
+        return result
     }
 
-    private func fetchChecklistItems(uuid: String, db: Database) throws -> [ChecklistItem] {
-        let sql = """
-            SELECT uuid, title, status
-            FROM TMChecklistItem
-            WHERE task = ?
-            ORDER BY "index"
-            """
-        let rows = try Row.fetchAll(db, sql: sql, arguments: [uuid])
-        return rows.map { row in
-            ChecklistItem(
+    private func bulkFetchChecklistItems(taskIds: [String], db: Database) throws -> [String: [ChecklistItem]] {
+        if taskIds.isEmpty { return [:] }
+        
+        let sql = "SELECT task, uuid, title, status FROM TMChecklistItem WHERE task IN ("
+        let placeholders = Array(repeating: "?", count: taskIds.count).joined(separator: ",")
+        let fullSql = sql + placeholders + ") ORDER BY \"index\""
+        
+        let rows = try Row.fetchAll(db, sql: fullSql, arguments: StatementArguments(taskIds))
+        
+        var result: [String: [ChecklistItem]] = [:]
+        for row in rows {
+            let taskId: String = row["task"]
+            let item = ChecklistItem(
                 id: row["uuid"],
                 name: row["title"],
                 completed: (row["status"] as Int) == 3
             )
+            result[taskId, default: []].append(item)
         }
+        return result
+    }
+    
+    private func bulkFetchProjectsBasic(projectIds: [String], db: Database) throws -> [String: Project] {
+        let uniqueIds = Array(Set(projectIds)) // Deduplicate
+        if uniqueIds.isEmpty { return [:] }
+        
+        let sql = "SELECT uuid, title, status FROM TMTask WHERE type = 1 AND uuid IN ("
+        let placeholders = Array(repeating: "?", count: uniqueIds.count).joined(separator: ",")
+        let fullSql = sql + placeholders + ")"
+        
+        let rows = try Row.fetchAll(db, sql: fullSql, arguments: StatementArguments(uniqueIds))
+        
+        var result: [String: Project] = [:]
+        for row in rows {
+            let uuid: String = row["uuid"]
+            let project = Project(
+                id: uuid,
+                name: row["title"],
+                notes: nil,
+                status: statusFromInt(row["status"]),
+                area: nil,
+                tags: [],
+                dueDate: nil,
+                creationDate: Date()
+            )
+            result[uuid] = project
+        }
+        return result
+    }
+    
+    private func bulkFetchAreas(areaIds: [String], db: Database) throws -> [String: Area] {
+        let uniqueIds = Array(Set(areaIds))
+        if uniqueIds.isEmpty { return [:] }
+        
+        let sql = "SELECT uuid, title FROM TMArea WHERE uuid IN ("
+        let placeholders = Array(repeating: "?", count: uniqueIds.count).joined(separator: ",")
+        let fullSql = sql + placeholders + ")"
+        
+        let rows = try Row.fetchAll(db, sql: fullSql, arguments: StatementArguments(uniqueIds))
+        
+        var result: [String: Area] = [:]
+        for row in rows {
+            let uuid: String = row["uuid"]
+            let area = Area(id: uuid, name: row["title"], tags: [])
+            result[uuid] = area
+        }
+        return result
     }
 
     private func statusFromInt(_ value: Int) -> Status {

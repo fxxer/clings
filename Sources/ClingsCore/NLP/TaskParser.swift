@@ -181,63 +181,7 @@ public struct TaskParser: Sendable {
 
     /// Parse a date string into a Date.
     private func parseDate(_ str: String) -> Date? {
-        let calendar = Calendar.current
-        let now = Date()
-
-        let lower = str.lowercased()
-
-        // Relative dates
-        if lower == "today" {
-            return calendar.startOfDay(for: now)
-        }
-        if lower == "tomorrow" {
-            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
-        }
-
-        // "in X days"
-        if lower.hasPrefix("in ") {
-            let parts = lower.split(separator: " ")
-            if parts.count >= 2, let days = Int(parts[1]) {
-                return calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: now))
-            }
-        }
-
-        // "next monday", "next friday", etc.
-        if lower.hasPrefix("next ") {
-            let dayName = String(lower.dropFirst(5))
-            if let weekday = weekdayFromName(dayName) {
-                return nextOccurrence(of: weekday, from: now)
-            }
-        }
-
-        // Day names (monday, tuesday, etc.)
-        if let weekday = weekdayFromName(lower) {
-            return nextOccurrence(of: weekday, from: now)
-        }
-
-        return nil
-    }
-
-    private func weekdayFromName(_ name: String) -> Int? {
-        let mapping: [String: Int] = [
-            "sunday": 1, "sun": 1,
-            "monday": 2, "mon": 2,
-            "tuesday": 3, "tue": 3,
-            "wednesday": 4, "wed": 4,
-            "thursday": 5, "thu": 5,
-            "friday": 6, "fri": 6,
-            "saturday": 7, "sat": 7,
-        ]
-        return mapping[name.lowercased()]
-    }
-
-    private func nextOccurrence(of weekday: Int, from date: Date) -> Date? {
-        let calendar = Calendar.current
-        let todayWeekday = calendar.component(.weekday, from: date)
-        var daysToAdd = weekday - todayWeekday
-        if daysToAdd <= 0 {
-            daysToAdd += 7
-        }
-        return calendar.date(byAdding: .day, value: daysToAdd, to: calendar.startOfDay(for: date))
+        // Use the centralized DateParser
+        return DateParser.shared.parse(str)
     }
 }

@@ -15,8 +15,6 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.3.0"),
         // SQLite for local database (sessions, cache, stats)
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.24.0"),
-        // Date parsing (natural language dates)
-        .package(url: "https://github.com/malcommac/SwiftDate.git", from: "7.0.0"),
     ],
     targets: [
         .executableTarget(
@@ -29,8 +27,7 @@ let package = Package(
         .target(
             name: "ClingsCore",
             dependencies: [
-                .product(name: "GRDB", package: "GRDB.swift"),
-                .product(name: "SwiftDate", package: "SwiftDate")
+                .product(name: "GRDB", package: "GRDB.swift")
             ]
         ),
         .testTarget(
