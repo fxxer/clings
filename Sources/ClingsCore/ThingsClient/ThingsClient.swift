@@ -62,7 +62,10 @@ public protocol ThingsClientProtocol: Sendable {
     func cancelTodo(id: String) async throws
     func deleteTodo(id: String) async throws
     func moveTodo(id: String, toProject: String) async throws
+    func moveTodoToProjectAndHeading(todoId: String, project: String, heading: String?) async throws
+    func addHeading(title: String, projectId: String) async throws
     func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws
+    func updateProject(id: String, name: String?, notes: String?, complete: Bool, cancel: Bool) async throws
 
     // Search
     func search(query: String) async throws -> [Todo]
@@ -183,6 +186,25 @@ public actor ThingsClient: ThingsClientProtocol {
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
+        // Checklist items are not supported via AppleScript — use Things URL scheme instead.
+        if !checklistItems.isEmpty {
+            guard let url = JXAScripts.buildCreateTodoWithChecklistURL(
+                name: name, notes: notes, when: when, deadline: deadline,
+                tags: tags, project: project, area: area, checklistItems: checklistItems
+            ) else {
+                throw ThingsError.operationFailed("Failed to construct Things URL for checklist creation")
+            }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = [url]
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw ThingsError.operationFailed("Failed to create todo via Things URL scheme (exit \(process.terminationStatus))")
+            }
+            return "" // URL scheme does not return the created todo ID
+        }
+
         let whenStr = when.map { appleScriptDateString($0) }
         let deadlineStr = deadline.map { appleScriptDateString($0) }
 
@@ -276,6 +298,27 @@ public actor ThingsClient: ThingsClientProtocol {
 
     public func moveTodo(id: String, toProject projectName: String) async throws {
         let script = JXAScripts.moveTodo(id: id, toProject: projectName)
+        let result = try await bridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
+    public func moveTodoToProjectAndHeading(todoId: String, project: String, heading: String?) async throws {
+        let script = JXAScripts.moveTodoToProjectAndHeading(todoId: todoId, project: project, heading: heading)
+        let result = try await bridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
+    public func addHeading(title: String, projectId: String) async throws {
+        // TODO: Things3 does not expose heading creation via JXA or AppleScript.
+        throw ThingsError.invalidState("add-heading is not supported: Things3 does not allow heading creation via JXA. Create headings in the Things3 UI.")
+    }
+
+    public func updateProject(id: String, name: String?, notes: String?, complete: Bool, cancel: Bool) async throws {
+        let script = JXAScripts.updateProject(id: id, name: name, notes: notes, complete: complete, cancel: cancel)
         let result = try await bridge.executeJSON(script, as: MutationResult.self)
         if !result.success {
             throw ThingsError.operationFailed(result.error ?? "Unknown error")

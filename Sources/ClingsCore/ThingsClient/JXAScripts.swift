@@ -299,6 +299,7 @@ public enum JXAScripts {
     }
 
     /// Create a new todo with the given properties via AppleScript.
+    /// Note: checklistItems must be empty — use createTodoWithChecklistURL for todos with checklist items.
     public static func createTodo(
         name: String,
         notes: String? = nil,
@@ -309,8 +310,8 @@ public enum JXAScripts {
         area: String? = nil,
         checklistItems: [String] = []
     ) -> String {
-        _ = tags  // Tags are applied separately via AppleScript.
-        let checklistArray = checklistItems.map { "\"\($0.appleScriptEscaped)\"" }.joined(separator: ", ")
+        _ = tags          // Tags are applied separately via AppleScript.
+        _ = checklistItems  // Checklist items require URL scheme — handled at client level.
 
         var propsCode = "name: \"\(name.appleScriptEscaped)\""
         if let notes = notes, !notes.isEmpty {
@@ -336,14 +337,68 @@ public enum JXAScripts {
             \(when != nil ? "schedule newTodo for date \"\(when!.appleScriptEscaped)\"" : "")
             \(deadline != nil ? "set due date of newTodo to date \"\(deadline!.appleScriptEscaped)\"" : "")
 
-            set checklistItems to {\(checklistArray)}
-            repeat with itemName in checklistItems
-                make new to do with properties {name:itemName} at newTodo
-            end repeat
-
             return id of newTodo
         end tell
         """
+    }
+
+    /// Create a new heading in a project via JXA. No auth token required.
+    public static func createHeading(title: String, projectId: String) -> String {
+        """
+        (() => {
+            const app = Application('Things3');
+            const project = app.projects.byId('\(projectId.jxaEscaped)');
+            if (!project.exists()) {
+                return JSON.stringify({ success: false, error: 'Project not found: \(projectId.jxaEscaped)' });
+            }
+            const h = app.make({ new: 'heading', withProperties: { name: '\(title.jxaEscaped)' }, at: project.toDos.end });
+            return JSON.stringify({ success: true, id: h.id() });
+        })()
+        """
+    }
+
+    /// Build a Things URL scheme URL for creating a todo with checklist items.
+    /// Returns the URL string or nil if construction fails.
+    /// Things URL scheme `add` does not require auth token and supports checklist-items (newline-separated).
+    public static func buildCreateTodoWithChecklistURL(
+        name: String,
+        notes: String?,
+        when: Date?,
+        deadline: Date?,
+        tags: [String],
+        project: String?,
+        area: String?,
+        checklistItems: [String]
+    ) -> String? {
+        var queryItems = [URLQueryItem(name: "title", value: name)]
+        if let notes = notes, !notes.isEmpty {
+            queryItems.append(.init(name: "notes", value: notes))
+        }
+        if let project = project {
+            queryItems.append(.init(name: "list", value: project))
+        } else if let area = area {
+            queryItems.append(.init(name: "list", value: area))
+        }
+        if !tags.isEmpty {
+            queryItems.append(.init(name: "tags", value: tags.joined(separator: ",")))
+        }
+        if !checklistItems.isEmpty {
+            queryItems.append(.init(name: "checklist-items", value: checklistItems.joined(separator: "\n")))
+        }
+        if let when = when {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            queryItems.append(.init(name: "when", value: fmt.string(from: when)))
+        }
+        if let deadline = deadline {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            queryItems.append(.init(name: "deadline", value: fmt.string(from: deadline)))
+        }
+
+        var components = URLComponents(string: "things:///add")!
+        components.queryItems = queryItems
+        return components.url?.absoluteString
     }
 
     /// Create a new project with the given properties.
@@ -388,6 +443,75 @@ public enum JXAScripts {
                 id: project.id(),
                 name: project.name()
             });
+        })()
+        """
+    }
+
+    /// Move a todo into a project and optionally under a heading within that project.
+    /// Project can be a name or UUID — tries byId first, falls back to byName.
+    /// When heading is nil, only the project assignment is done.
+    public static func moveTodoToProjectAndHeading(todoId: String, project: String, heading: String?) -> String {
+        let headingBlock: String
+        if let heading = heading {
+            headingBlock = """
+            const todos = project.toDos();
+            const headingIdx = todos.findIndex(function(t) { return t.name() === '\(heading.jxaEscaped)'; });
+            if (headingIdx >= 0) {
+                app.move(todo, { to: project.toDos[headingIdx] });
+            }
+            """
+        } else {
+            headingBlock = "// no heading specified"
+        }
+
+        return """
+        (() => {
+            const app = Application('Things3');
+            const todo = app.toDos.byId('\(todoId.jxaEscaped)');
+            if (!todo.exists()) {
+                return JSON.stringify({ success: false, error: 'Todo not found' });
+            }
+
+            let project = app.projects.byId('\(project.jxaEscaped)');
+            if (!project.exists()) {
+                project = app.projects.byName('\(project.jxaEscaped)');
+            }
+            if (!project.exists()) {
+                return JSON.stringify({ success: false, error: 'Project not found: \(project.jxaEscaped)' });
+            }
+
+            todo.project = project;
+
+            \(headingBlock)
+
+            return JSON.stringify({ success: true, id: '\(todoId.jxaEscaped)' });
+        })()
+        """
+    }
+
+    /// Update a project's properties.
+    public static func updateProject(
+        id: String,
+        name: String? = nil,
+        notes: String? = nil,
+        complete: Bool = false,
+        cancel: Bool = false
+    ) -> String {
+        return """
+        (() => {
+            const app = Application('Things3');
+            const project = app.projects.byId('\(id.jxaEscaped)');
+
+            if (!project.exists()) {
+                return JSON.stringify({ success: false, error: 'Project not found' });
+            }
+
+            \(name != nil ? "project.name = '\(name!.jxaEscaped)';" : "")
+            \(notes != nil ? "project.notes = '\(notes!.jxaEscaped)';" : "")
+            \(complete ? "project.status = 'completed';" : "")
+            \(cancel ? "project.status = 'canceled';" : "")
+
+            return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
         })()
         """
     }

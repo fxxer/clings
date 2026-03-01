@@ -50,6 +50,12 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
     /// Track move operations (todoId, projectName).
     private(set) var moveOperations: [(String, String)] = []
 
+    /// Track moveTodoToProjectAndHeading operations.
+    private(set) var moveToProjectAndHeadingOperations: [(todoId: String, project: String, heading: String?)] = []
+
+    /// Track updateProject operations.
+    private(set) var updateProjectOperations: [(id: String, name: String?, notes: String?, complete: Bool, cancel: Bool)] = []
+
     /// Track update operations.
     private(set) var updateOperations: [(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?)] = []
 
@@ -149,6 +155,20 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         moveOperations.append((id, projectName))
     }
 
+    func moveTodoToProjectAndHeading(todoId: String, project: String, heading: String?) async throws {
+        if let error = errorToThrow { throw error }
+        moveToProjectAndHeadingOperations.append((todoId: todoId, project: project, heading: heading))
+    }
+
+    func updateProject(id: String, name: String?, notes: String?, complete: Bool, cancel: Bool) async throws {
+        if let error = errorToThrow { throw error }
+        updateProjectOperations.append((id: id, name: name, notes: notes, complete: complete, cancel: cancel))
+    }
+
+    func addHeading(title: String, projectId: String) async throws {
+        if let error = errorToThrow { throw error }
+    }
+
     func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
         if let error = errorToThrow { throw error }
         updateOperations.append((id, name, notes, dueDate, tags))
@@ -206,6 +226,8 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         canceledIds = []
         deletedIds = []
         moveOperations = []
+        moveToProjectAndHeadingOperations = []
+        updateProjectOperations = []
         updateOperations = []
         searchQueries = []
         openedIds = []

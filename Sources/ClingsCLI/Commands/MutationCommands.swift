@@ -184,8 +184,7 @@ struct UpdateCommand: AsyncParsableCommand {
           clings update ABC123 --name "New title"
           clings update ABC123 --notes "Updated notes"
           clings update ABC123 --due 2024-12-25
-          clings update ABC123 --when tomorrow
-          clings update ABC123 --heading "Waiting on them"
+          clings update ABC123 --project "Week #9" --heading "Personal"
           clings update ABC123 --tags work,urgent
         """
     )
@@ -202,72 +201,29 @@ struct UpdateCommand: AsyncParsableCommand {
     @Option(name: .long, help: "New due date (YYYY-MM-DD or 'today', 'tomorrow')")
     var due: String?
 
-    @Option(name: .long, help: "Schedule for a date ('today', 'tomorrow', 'evening', 'anytime', 'someday', or YYYY-MM-DD). Requires auth token.")
-    var when: String?
+    // TODO: --when requires Things URL scheme auth token, not supported yet
+    // var when: String?
+    // TODO: --heading requires things:///update auth token, not supported yet
+    // var heading: String?
 
-    @Option(name: .long, help: "Move to a heading within the task's project. Requires auth token.")
-    var heading: String?
+    @Option(name: .long, help: "Move todo to this project (by name or UUID).")
+    var project: String?
 
     @Option(name: .long, parsing: .upToNextOption, help: "New tags (replaces existing)")
     var tags: [String] = []
 
+    @Option(name: .long, help: "Move todo under this heading (requires --project; needs auth token: clings config set-auth-token <token>)")
+    var heading: String?
+
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        // Check if any update options provided
-        guard name != nil || notes != nil || due != nil || when != nil || heading != nil || !tags.isEmpty else {
-            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --due, --when, --heading, or --tags.")
-        }
-
-        // Validate --when value if provided
-        if let when = when {
-            let validKeywords = Set(["today", "tomorrow", "evening", "anytime", "someday"])
-            let isKeyword = validKeywords.contains(when.lowercased())
-            let isDate = parseDate(when) != nil
-            guard isKeyword || isDate else {
-                throw ThingsError.invalidState(
-                    "Invalid --when value: '\(when)'. Use 'today', 'tomorrow', 'evening', 'anytime', 'someday', or YYYY-MM-DD."
-                )
-            }
-        }
-
-        // Validate and trim --heading
-        let resolvedHeading: String?
-        if let heading = heading {
-            let trimmed = heading.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                throw ThingsError.invalidState("--heading value cannot be empty")
-            }
-            guard !trimmed.contains(where: { $0.isNewline }) else {
-                throw ThingsError.invalidState("--heading value cannot contain newlines")
-            }
-            resolvedHeading = trimmed
-        } else {
-            resolvedHeading = nil
-        }
-
-        // Pre-validate auth token before any mutations to avoid partial updates
-        let needsURLScheme = when != nil || resolvedHeading != nil
-        var prevalidatedToken: String? = nil
-        if needsURLScheme {
-            do {
-                prevalidatedToken = try AuthTokenStore.loadToken()
-            } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
-                throw ThingsError.invalidState(
-                    "Things auth token required for --when/--heading. Set with: clings config set-auth-token <token>"
-                )
-            } catch let error as ThingsError {
-                throw error
-            } catch {
-                throw ThingsError.operationFailed(
-                    "Failed to read auth token: \(error.localizedDescription). Try re-setting with: clings config set-auth-token <token>"
-                )
-            }
+        guard name != nil || notes != nil || due != nil || project != nil || !tags.isEmpty || heading != nil else {
+            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --due, --project, --tags, or --heading.")
         }
 
         let client = ThingsClientFactory.create()
 
-        // Parse due date if provided
         var dueDate: Date? = nil
         if let dueStr = due {
             dueDate = parseDate(dueStr)
@@ -276,41 +232,32 @@ struct UpdateCommand: AsyncParsableCommand {
             }
         }
 
-        // Update via JXA (name, notes, dueDate, tags)
-        let hasJXAUpdates = name != nil || notes != nil || dueDate != nil || !tags.isEmpty
-        if hasJXAUpdates {
+        if name != nil || notes != nil || dueDate != nil || !tags.isEmpty {
+            // Interpret literal \n as newline (shell double-quote strings don't expand \n)
+            let processedNotes = notes?.replacingOccurrences(of: "\\n", with: "\n")
             try await client.updateTodo(
                 id: id,
                 name: name,
-                notes: notes,
+                notes: processedNotes,
                 dueDate: dueDate,
                 tags: tags.isEmpty ? nil : tags
             )
         }
 
-        // Handle when and heading via Things URL scheme (activationDate is read-only in JXA)
-        if needsURLScheme, let token = prevalidatedToken {
-            do {
-                try updateViaURLScheme(id: id, when: when, heading: resolvedHeading, token: token)
-            } catch {
-                if hasJXAUpdates {
-                    let jxaFields = [name != nil ? "name" : nil, notes != nil ? "notes" : nil,
-                                   dueDate != nil ? "due date" : nil, !tags.isEmpty ? "tags" : nil]
-                        .compactMap { $0 }.joined(separator: ", ")
-                    throw ThingsError.operationFailed(
-                        "Partial update: \(jxaFields) updated, but --when/--heading failed: \(error.localizedDescription)"
-                    )
-                }
-                throw error
-            }
+        if heading != nil {
+            // heading placement requires URL scheme + auth token (JXA cannot access headings)
+            let token = try AuthTokenStore.loadToken()
+            try updateTodoViaURLScheme(id: id, project: project, heading: heading, authToken: token)
+        } else if let projectName = project {
+            // project-only move: pure JXA, no auth token needed
+            try await client.moveTodoToProjectAndHeading(todoId: id, project: projectName, heading: nil)
         }
 
         let formatter: OutputFormatter = output.json
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
-        let urlSchemeNote = needsURLScheme ? " (--when/--heading sent via URL scheme; verify in Things)" : ""
-        print(formatter.format(message: "Updated todo: \(id)\(urlSchemeNote)"))
+        print(formatter.format(message: "Updated todo: \(id)"))
     }
 
     private func parseDate(_ str: String) -> Date? {
@@ -331,37 +278,31 @@ struct UpdateCommand: AsyncParsableCommand {
         return formatter.date(from: str)
     }
 
-    private func updateViaURLScheme(id: String, when: String?, heading: String?, token: String) throws {
+    /// Update a todo's project/heading via things:///update URL scheme (requires auth token).
+    private func updateTodoViaURLScheme(id: String, project: String?, heading: String?, authToken: String) throws {
         var queryItems = [
-            URLQueryItem(name: "auth-token", value: token),
             URLQueryItem(name: "id", value: id),
+            URLQueryItem(name: "auth-token", value: authToken),
         ]
-        if let when = when {
-            queryItems.append(URLQueryItem(name: "when", value: when.lowercased()))
+        if let project = project {
+            queryItems.append(URLQueryItem(name: "list", value: project))
         }
         if let heading = heading {
             queryItems.append(URLQueryItem(name: "heading", value: heading))
         }
-
-        guard var components = URLComponents(string: "things:///update") else {
-            throw ThingsError.operationFailed("Internal error: failed to parse Things URL base")
-        }
+        var components = URLComponents(string: "things:///update")!
         components.queryItems = queryItems
         guard let url = components.url?.absoluteString else {
-            throw ThingsError.operationFailed("Failed to construct Things URL")
+            throw ThingsError.operationFailed("Failed to build Things URL for update")
         }
-
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
         process.arguments = [url]
-        do {
-            try process.run()
-        } catch {
-            throw ThingsError.operationFailed("Failed to launch Things URL scheme handler: \(error.localizedDescription)")
-        }
+        try process.run()
         process.waitUntilExit()
         guard process.terminationStatus == 0 else {
-            throw ThingsError.operationFailed("Failed to update via Things URL scheme (exit code \(process.terminationStatus))")
+            throw ThingsError.operationFailed("Failed to update todo via Things URL (exit \(process.terminationStatus))")
         }
     }
+
 }

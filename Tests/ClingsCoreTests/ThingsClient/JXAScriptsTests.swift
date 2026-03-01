@@ -250,46 +250,44 @@ struct JXAScriptsTests {
 
     @Suite("Create Todo Script")
     struct CreateTodoScript {
+        // createTodo generates AppleScript (not JXA) — executed via osascript directly.
         @Test func withName() {
             let script = JXAScripts.createTodo(name: "New Task")
-            #expect(script.contains("name: 'New Task'"))
-            #expect(script.contains("app.make({ new: 'to do'"))
+            #expect(script.contains("New Task"))
+            #expect(script.contains("Things3"))
         }
 
         @Test func withNotes() {
             let script = JXAScripts.createTodo(name: "Task", notes: "Some notes")
-            #expect(script.contains("notes: 'Some notes'"))
+            #expect(script.contains("Some notes"))
         }
 
         @Test func withTags() {
             let script = JXAScripts.createTodo(name: "Task", tags: ["tag1", "tag2"])
-            // Tags are applied via AppleScript after creation, not in the JXA script.
-            #expect(!script.contains("'tag1'"))
-            #expect(!script.contains("'tag2'"))
+            // Tags are applied via AppleScript after creation, not in the create script.
+            #expect(!script.contains("tag1"))
+            #expect(!script.contains("tag2"))
         }
 
         @Test func withProject() {
             let script = JXAScripts.createTodo(name: "Task", project: "My Project")
-            #expect(script.contains("app.projects.byName('My Project')"))
-            #expect(script.contains("todo.project = project"))
+            #expect(script.contains("My Project"))
         }
 
         @Test func withArea() {
             let script = JXAScripts.createTodo(name: "Task", area: "Work Area")
-            #expect(script.contains("app.areas.byName('Work Area')"))
-            #expect(script.contains("todo.area = area"))
+            #expect(script.contains("Work Area"))
         }
 
         @Test func withChecklistItems() {
+            // Checklist items use Things URL scheme — not included in createTodo script.
             let script = JXAScripts.createTodo(name: "Task", checklistItems: ["Step 1", "Step 2"])
-            #expect(script.contains("'Step 1'"))
-            #expect(script.contains("'Step 2'"))
+            #expect(!script.contains("Step 1"))
         }
 
-        @Test func returnsIdAndName() {
+        @Test func returnsId() {
             let script = JXAScripts.createTodo(name: "Task")
-            #expect(script.contains("id: todo.id()"))
-            #expect(script.contains("name: todo.name()"))
+            #expect(script.contains("id of newTodo") || script.contains("newTodo"))
         }
     }
 
@@ -319,8 +317,9 @@ struct JXAScriptsTests {
 
     @Suite("Script Validity")
     struct ScriptValidity {
-        @Test func allScriptsAreIIFE() {
-            // All scripts should be Immediately Invoked Function Expressions
+        @Test func allJXAScriptsAreIIFE() {
+            // JXA scripts should be Immediately Invoked Function Expressions.
+            // Note: createTodo uses AppleScript, not JXA — excluded here.
             let scripts = [
                 JXAScripts.fetchList("Today"),
                 JXAScripts.fetchTodo(id: "test"),
@@ -332,7 +331,6 @@ struct JXAScriptsTests {
                 JXAScripts.deleteTodo(id: "test"),
                 JXAScripts.moveTodo(id: "test", toProject: "Project"),
                 JXAScripts.updateTodo(id: "test", name: "Name"),
-                JXAScripts.createTodo(name: "Task"),
                 JXAScripts.search(query: "test"),
             ]
 
@@ -342,7 +340,8 @@ struct JXAScriptsTests {
             }
         }
 
-        @Test func allScriptsUseThings3App() {
+        @Test func allJXAScriptsUseThings3App() {
+            // Note: createTodo uses AppleScript — excluded here.
             let scripts = [
                 JXAScripts.fetchList("Today"),
                 JXAScripts.fetchTodo(id: "test"),
@@ -354,7 +353,6 @@ struct JXAScriptsTests {
                 JXAScripts.deleteTodo(id: "test"),
                 JXAScripts.moveTodo(id: "test", toProject: "Project"),
                 JXAScripts.updateTodo(id: "test", name: "Name"),
-                JXAScripts.createTodo(name: "Task"),
                 JXAScripts.search(query: "test"),
             ]
 

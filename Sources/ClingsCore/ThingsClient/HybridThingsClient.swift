@@ -53,6 +53,25 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
+        // Checklist items are not supported via AppleScript — use Things URL scheme instead.
+        if !checklistItems.isEmpty {
+            guard let url = JXAScripts.buildCreateTodoWithChecklistURL(
+                name: name, notes: notes, when: when, deadline: deadline,
+                tags: tags, project: project, area: area, checklistItems: checklistItems
+            ) else {
+                throw ThingsError.operationFailed("Failed to construct Things URL for checklist creation")
+            }
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+            process.arguments = [url]
+            try process.run()
+            process.waitUntilExit()
+            guard process.terminationStatus == 0 else {
+                throw ThingsError.operationFailed("Failed to create todo via Things URL scheme (exit \(process.terminationStatus))")
+            }
+            return "" // URL scheme does not return the created todo ID
+        }
+
         let whenStr = when.map { appleScriptDateString($0) }
         let deadlineStr = deadline.map { appleScriptDateString($0) }
 
@@ -152,6 +171,38 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         }
     }
 
+    public func moveTodoToProjectAndHeading(todoId: String, project: String, heading: String?) async throws {
+        // Resolve project name to UUID if needed (JXA byId is faster than byName)
+        let projectId: String
+        if let pid = (try? database.fetchProjectId(byName: project)), !pid.isEmpty {
+            projectId = pid
+        } else {
+            projectId = project
+        }
+
+        // Single JXA call: move to project + optionally move under heading by name
+        let script = JXAScripts.moveTodoToProjectAndHeading(todoId: todoId, project: projectId, heading: heading)
+        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
+    public func addHeading(title: String, projectId: String) async throws {
+        // TODO: Things3 does not expose heading creation via JXA or AppleScript.
+        // The only API path is things:///json which requires an auth token.
+        // Create headings manually in Things3 UI for now.
+        throw ThingsError.invalidState("add-heading is not supported: Things3 does not allow heading creation via JXA. Create headings in the Things3 UI.")
+    }
+
+    public func updateProject(id: String, name: String?, notes: String?, complete: Bool, cancel: Bool) async throws {
+        let script = JXAScripts.updateProject(id: id, name: name, notes: notes, complete: complete, cancel: cancel)
+        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
     public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
         // Handle non-tag updates via JXA (name, notes, dueDate work fine)
         if name != nil || notes != nil || dueDate != nil {
@@ -210,6 +261,17 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
 
     public nonisolated func openInThings(list: ListView) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
+    }
+
+    private func openURL(_ urlString: String) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = [urlString]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw ThingsError.operationFailed("URL scheme failed (exit \(process.terminationStatus))")
+        }
     }
 
     private func appleScriptDateString(_ date: Date) -> String {

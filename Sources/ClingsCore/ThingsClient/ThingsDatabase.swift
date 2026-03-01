@@ -78,19 +78,20 @@ public final class ThingsDatabase: Sendable {
                 arguments = []
 
             case .today:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayValue = thingsStartDateForDay(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
-                          AND (start = 1 OR startDate = ?)
+                          AND startDate IS NOT NULL AND startDate <= ?
+                          AND (rt1_instanceCreationPaused IS NULL OR rt1_instanceCreationPaused = 0)
                     ORDER BY todayIndex, "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayValue]
 
             case .upcoming:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayValue = thingsStartDateForDay(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -98,10 +99,10 @@ public final class ThingsDatabase: Sendable {
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
                     ORDER BY startDate, "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayValue]
 
             case .anytime:
-                let todayDays = daysSinceReferenceDate(Date())
+                let todayValue = thingsStartDateForDay(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area
@@ -110,7 +111,7 @@ public final class ThingsDatabase: Sendable {
                           AND (startDate IS NULL OR startDate <= ?)
                     ORDER BY "index"
                     """
-                arguments = [todayDays]
+                arguments = [todayValue]
 
             case .someday:
                 sql = """
@@ -287,10 +288,10 @@ public final class ThingsDatabase: Sendable {
             Date(timeIntervalSinceReferenceDate: TimeInterval($0))
         }
         let creationDate: Date = (row["creationDate"] as Double?).flatMap {
-            Date(timeIntervalSinceReferenceDate: $0)
+            Date(timeIntervalSince1970: $0)
         } ?? Date()
         let modificationDate: Date = (row["userModificationDate"] as Double?).flatMap {
-            Date(timeIntervalSinceReferenceDate: $0)
+            Date(timeIntervalSince1970: $0)
         } ?? creationDate
 
         return Todo(
@@ -306,6 +307,31 @@ public final class ThingsDatabase: Sendable {
             creationDate: creationDate,
             modificationDate: modificationDate
         )
+    }
+
+    /// Fetch the UUID of a heading by name within a project.
+    /// Headings are TMTask records with type=2 belonging to a project.
+    public func fetchHeadingId(projectId: String, headingName: String) throws -> String? {
+        let db = try openDatabase()
+        return try db.read { db in
+            let sql = "SELECT uuid FROM TMTask WHERE project = ? AND type = 2 AND title = ? AND trashed = 0 LIMIT 1"
+            guard let row = try Row.fetchOne(db, sql: sql, arguments: [projectId, headingName]) else {
+                return nil
+            }
+            return row["uuid"]
+        }
+    }
+
+    /// Fetch the UUID of a project by name.
+    public func fetchProjectId(byName name: String) throws -> String? {
+        let db = try openDatabase()
+        return try db.read { db in
+            let sql = "SELECT uuid FROM TMTask WHERE type = 1 AND title = ? AND trashed = 0 LIMIT 1"
+            guard let row = try Row.fetchOne(db, sql: sql, arguments: [name]) else {
+                return nil
+            }
+            return row["uuid"]
+        }
     }
 
     private func fetchProjectBasic(uuid: String, db: Database) throws -> Project? {
@@ -383,14 +409,14 @@ public final class ThingsDatabase: Sendable {
         }
     }
 
-    /// Calculate days since Cocoa reference date (January 1, 2001).
-    /// Things 3 stores startDate as days, not seconds.
-    private func daysSinceReferenceDate(_ date: Date) -> Int {
-        let calendar = Calendar.current
-        let startOfDay = calendar.startOfDay(for: date)
-        // Reference date is Jan 1, 2001 00:00:00 UTC
-        let referenceDate = Date(timeIntervalSinceReferenceDate: 0)
-        let components = calendar.dateComponents([.day], from: referenceDate, to: startOfDay)
-        return components.day ?? 0
+    /// Calculate Things 3 startDate value for a given day.
+    /// Things 3 stores startDate as: utcDaysSince2001 * 640 + 126906752
+    private func thingsStartDateForDay(_ date: Date) -> Int {
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = TimeZone(identifier: "UTC")!
+        let referenceDate = Date(timeIntervalSinceReferenceDate: 0) // 2001-01-01 00:00 UTC
+        let startOfDayUTC = utcCalendar.startOfDay(for: date)
+        let days = utcCalendar.dateComponents([.day], from: referenceDate, to: startOfDayUTC).day ?? 0
+        return days * 640 + 126906752
     }
 }

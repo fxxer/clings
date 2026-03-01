@@ -42,6 +42,12 @@ struct AddCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Add to an area")
     var area: String?
 
+    @Option(name: .long, parsing: .upToNextOption, help: "Add checklist items")
+    var checklist: [String] = []
+
+    @Option(name: .long, help: "Add todo under this heading (requires --project or @Project in title)")
+    var heading: String?
+
     @Flag(name: .long, help: "Show parsed result without creating todo")
     var parseOnly = false
 
@@ -64,6 +70,9 @@ struct AddCommand: AsyncParsableCommand {
         if let area = area {
             parsed.area = area
         }
+        if !checklist.isEmpty {
+            parsed.checklistItems.append(contentsOf: checklist)
+        }
         if let when = when {
             parsed.whenDate = parseSimpleDate(when)
         }
@@ -77,23 +86,89 @@ struct AddCommand: AsyncParsableCommand {
             return
         }
 
+        // Validate --heading requires a project
+        if heading != nil, parsed.project == nil {
+            throw ThingsError.invalidState("--heading requires --project or @ProjectName in title")
+        }
+        // Checklist creation uses URL scheme (no ID returned) — incompatible with --heading
+        if heading != nil, !parsed.checklistItems.isEmpty {
+            throw ThingsError.invalidState("--heading and --checklist cannot be combined")
+        }
+
         let client = ThingsClientFactory.create()
-        _ = try await client.createTodo(
-            name: parsed.title,
-            notes: parsed.notes,
-            when: parsed.whenDate,
-            deadline: parsed.dueDate,
-            tags: parsed.tags,
-            project: parsed.project,
-            area: parsed.area,
-            checklistItems: parsed.checklistItems
-        )
+
+        // --heading path: use things:///add with list-id + heading (no auth required for new todos)
+        if let headingName = heading, let projectName = parsed.project {
+            // Resolve project name → UUID so things:///add can find the right project
+            let projectId: String
+            let projects = try await client.fetchProjects()
+            if let match = projects.first(where: { $0.name == projectName }) {
+                projectId = match.id
+            } else {
+                // Fall back to name if UUID not found (Things will match by name)
+                projectId = projectName
+            }
+            try createTodoViaURLScheme(
+                title: parsed.title,
+                notes: parsed.notes,
+                tags: parsed.tags,
+                projectId: projectId,
+                headingName: headingName,
+                deadline: parsed.dueDate
+            )
+        } else {
+            _ = try await client.createTodo(
+                name: parsed.title,
+                notes: parsed.notes,
+                when: parsed.whenDate,
+                deadline: parsed.dueDate,
+                tags: parsed.tags,
+                project: parsed.project,
+                area: parsed.area,
+                checklistItems: parsed.checklistItems
+            )
+        }
 
         let outputFormatter: OutputFormatter = output.json
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
         print(outputFormatter.format(message: "Created: \(parsed.title)"))
+    }
+
+    /// Create todo via things:///add URL scheme — the only way to place a new todo under a heading without auth token.
+    private func createTodoViaURLScheme(
+        title: String, notes: String?, tags: [String], projectId: String, headingName: String, deadline: Date?
+    ) throws {
+        var items = [URLQueryItem(name: "title", value: title)]
+        items.append(URLQueryItem(name: "list-id", value: projectId))
+        items.append(URLQueryItem(name: "heading", value: headingName))
+        if let notes = notes, !notes.isEmpty {
+            items.append(URLQueryItem(name: "notes", value: notes))
+        }
+        if !tags.isEmpty {
+            items.append(URLQueryItem(name: "tags", value: tags.joined(separator: ",")))
+        }
+        if let deadline = deadline {
+            let fmt = DateFormatter()
+            fmt.dateFormat = "yyyy-MM-dd"
+            items.append(URLQueryItem(name: "deadline", value: fmt.string(from: deadline)))
+        }
+
+        var components = URLComponents(string: "things:///add")!
+        components.queryItems = items
+        guard let url = components.url?.absoluteString else {
+            throw ThingsError.operationFailed("Failed to build Things URL for heading-based todo")
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/open")
+        process.arguments = [url]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw ThingsError.operationFailed("Failed to create todo via Things URL scheme (exit \(process.terminationStatus))")
+        }
     }
 
     private func parseSimpleDate(_ str: String) -> Date? {
