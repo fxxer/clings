@@ -45,6 +45,9 @@ struct AddCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Add to an area")
     var area: String?
 
+    @Option(name: .long, parsing: .upToNextOption, help: "Add checklist items")
+    var checklist: [String] = []
+
     @Flag(name: .long, help: "Show parsed result without creating todo")
     var parseOnly = false
 
@@ -60,6 +63,9 @@ struct AddCommand: AsyncParsableCommand {
         }
         if !tags.isEmpty {
             parsed.tags.append(contentsOf: tags)
+        }
+        if !checklist.isEmpty {
+            parsed.checklistItems.append(contentsOf: checklist)
         }
         if let project = project {
             parsed.project = project

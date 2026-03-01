@@ -166,30 +166,37 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         notes: String?,
         status: Status?
     ) async throws {
-        var components = URLComponents(string: "things:///update-project")!
-        var queryItems = [URLQueryItem(name: "id", value: id)]
-        
-        appendAuthToken(to: &queryItems)
-        
-        if let notes = notes {
-            queryItems.append(URLQueryItem(name: "notes", value: notes))
-        }
-        
-        if let status = status {
-            switch status {
-            case .completed: queryItems.append(URLQueryItem(name: "completed", value: "true"))
-            case .canceled: queryItems.append(URLQueryItem(name: "canceled", value: "true"))
-            default: break
+        // Using JXA for updates is more reliable than URL scheme for existing projects.
+        // It allows direct property manipulation without triggering UI focus issues.
+        let script = """
+        (() => {
+            const app = Application('Things3');
+            // Try to find by ID first, then by name
+            let project = app.projects.byId('\(id.jxaEscaped)');
+            if (!project.exists()) {
+                project = app.projects.byName('\(id.jxaEscaped)');
             }
-        }
+            
+            if (!project.exists()) {
+                return JSON.stringify({ success: false, error: 'Project not found' });
+            }
+            
+            \(notes != nil ? "project.notes = '\(notes!.jxaEscaped)';" : "")
+            
+            if ('\(status?.rawValue ?? "")' === 'completed') {
+                project.status = 'completed';
+            } else if ('\(status?.rawValue ?? "")' === 'canceled') {
+                project.status = 'canceled';
+            }
+            
+            return JSON.stringify({ success: true, id: project.id(), name: project.name() });
+        })()
+        """
         
-        components.queryItems = queryItems
-        guard let url = components.url else {
-            throw ThingsError.operationFailed("Could not construct update URL")
+        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
         }
-        
-        let script = "open location \"\(url.absoluteString)\""
-        _ = try await jxaBridge.executeAppleScript(script)
     }
 
     private func createProjectWithHeadingsJSON(

@@ -205,6 +205,9 @@ struct UpdateCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Schedule for a date ('today', 'tomorrow', 'evening', 'anytime', 'someday', or YYYY-MM-DD). Requires auth token.")
     var when: String?
 
+    @Option(name: .long, help: "Set or change the project")
+    var project: String?
+
     @Option(name: .long, help: "Move to a heading within the task's project. Requires auth token.")
     var heading: String?
 
@@ -289,9 +292,9 @@ struct UpdateCommand: AsyncParsableCommand {
         }
 
         // Handle when and heading via Things URL scheme (activationDate is read-only in JXA)
-        if needsURLScheme, let token = prevalidatedToken {
+        if needsURLScheme || project != nil, let token = prevalidatedToken {
             do {
-                try updateViaURLScheme(id: id, when: when, heading: resolvedHeading, token: token)
+                try updateViaURLScheme(id: id, when: when, project: project, heading: resolvedHeading, token: token)
             } catch {
                 if hasJXAUpdates {
                     let jxaFields = [name != nil ? "name" : nil, notes != nil ? "notes" : nil,
@@ -331,13 +334,16 @@ struct UpdateCommand: AsyncParsableCommand {
         return formatter.date(from: str)
     }
 
-    private func updateViaURLScheme(id: String, when: String?, heading: String?, token: String) throws {
+    private func updateViaURLScheme(id: String, when: String?, project: String?, heading: String?, token: String) throws {
         var queryItems = [
             URLQueryItem(name: "auth-token", value: token),
             URLQueryItem(name: "id", value: id),
         ]
         if let when = when {
             queryItems.append(URLQueryItem(name: "when", value: when.lowercased()))
+        }
+        if let project = project {
+            queryItems.append(URLQueryItem(name: "list", value: project))
         }
         if let heading = heading {
             queryItems.append(URLQueryItem(name: "heading", value: heading))
