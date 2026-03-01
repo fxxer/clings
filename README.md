@@ -90,11 +90,13 @@ clings filter "due < today AND status = open"
 clings filter "tags CONTAINS 'urgent'"
 clings filter "name LIKE '%report%'"
 clings filter "project IS NOT NULL"
+clings filter "when IS NOT NULL"        # todos with a scheduled date
+clings filter "when < today"            # overdue scheduled todos
 ```
 
 **Filter operators:** `=`, `!=`, `<`, `>`, `<=`, `>=`, `LIKE`, `CONTAINS`, `IS NULL`, `IS NOT NULL`, `IN`
 **Logic:** `AND`, `OR`
-**Fields:** `status`, `due`, `tags`, `project`, `area`, `name`, `notes`, `created`
+**Fields:** `status`, `due`, `tags`, `project`, `area`, `name`, `notes`, `created`, `when` (scheduled date)
 
 ### 4. Todo Management
 
@@ -311,6 +313,8 @@ clings project --help
 | `anytime` | - | Show anytime todos |
 | `someday` | `s` | Show someday todos |
 | `logbook` | `l` | Show completed todos |
+| `trash` | - | Show trashed todos |
+| `recent` | - | Show recently created todos (e.g. `recent 3d`, `recent 1w`) |
 | `projects` | - | List all projects |
 | `project list` | `project ls` | List all projects |
 | `project add` | - | Create a new project (supports `--heading`) |
