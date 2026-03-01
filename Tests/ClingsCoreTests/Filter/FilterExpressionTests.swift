@@ -292,6 +292,70 @@ struct FilterExpressionTests {
         }
     }
 
+    @Suite("when field filter")
+    struct WhenFieldTests {
+        private func makeScheduledTodo(scheduledDate: Date?) -> Todo {
+            Todo(
+                id: "scheduled-1",
+                name: "Scheduled task",
+                scheduledDate: scheduledDate
+            )
+        }
+
+        @Test func whenIsNotNull() throws {
+            let expr = try FilterParser.parse("when IS NOT NULL")
+            let scheduled = makeScheduledTodo(scheduledDate: Date())
+            let unscheduled = makeScheduledTodo(scheduledDate: nil)
+
+            #expect(expr.matches(scheduled))
+            #expect(!expr.matches(unscheduled))
+        }
+
+        @Test func whenIsNull() throws {
+            let expr = try FilterParser.parse("when IS NULL")
+            let scheduled = makeScheduledTodo(scheduledDate: Date())
+            let unscheduled = makeScheduledTodo(scheduledDate: nil)
+
+            #expect(!expr.matches(scheduled))
+            #expect(expr.matches(unscheduled))
+        }
+
+        @Test func whenBeforeToday() throws {
+            let expr = try FilterParser.parse("when < today")
+            let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: Date())!
+            let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: Date())!
+
+            let pastScheduled = makeScheduledTodo(scheduledDate: yesterday)
+            let futureScheduled = makeScheduledTodo(scheduledDate: tomorrow)
+
+            #expect(expr.matches(pastScheduled))
+            #expect(!expr.matches(futureScheduled))
+        }
+
+        @Test func scheduledFieldAlias() throws {
+            // "scheduled" is an alias for "when"
+            let expr = try FilterParser.parse("scheduled IS NOT NULL")
+            let scheduled = makeScheduledTodo(scheduledDate: Date())
+            let unscheduled = makeScheduledTodo(scheduledDate: nil)
+
+            #expect(expr.matches(scheduled))
+            #expect(!expr.matches(unscheduled))
+        }
+
+        @Test func whenEqualsDate() throws {
+            let expr = try FilterParser.parse("when = 2026-03-15")
+            let target = makeScheduledTodo(scheduledDate: {
+                var comps = DateComponents()
+                comps.year = 2026; comps.month = 3; comps.day = 15
+                return Calendar.current.date(from: comps)!
+            }())
+            let other = makeScheduledTodo(scheduledDate: Date())
+
+            #expect(expr.matches(target))
+            #expect(!expr.matches(other))
+        }
+    }
+
     @Suite("FilterOperator")
     struct FilterOperatorTests {
         @Test func filterOperatorRawValues() {

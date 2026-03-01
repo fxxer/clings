@@ -69,7 +69,7 @@ public final class ThingsDatabase: Sendable {
             case .inbox:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
                           AND start = 0 AND project IS NULL AND startDate IS NULL
@@ -81,7 +81,7 @@ public final class ThingsDatabase: Sendable {
                 let todayDays = daysSinceReferenceDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
                           AND (start = 1 OR startDate = ?)
@@ -93,7 +93,7 @@ public final class ThingsDatabase: Sendable {
                 let todayDays = daysSinceReferenceDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND startDate > ?
                     ORDER BY startDate, "index"
@@ -104,7 +104,7 @@ public final class ThingsDatabase: Sendable {
                 let todayDays = daysSinceReferenceDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 1
                           AND (startDate IS NULL OR startDate <= ?)
@@ -115,7 +115,7 @@ public final class ThingsDatabase: Sendable {
             case .someday:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 2
                     ORDER BY "index"
@@ -125,7 +125,7 @@ public final class ThingsDatabase: Sendable {
             case .logbook:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate
                     FROM TMTask
                     WHERE status = 3 AND trashed = 0 AND type = 0
                     ORDER BY stopDate DESC
@@ -136,7 +136,7 @@ public final class ThingsDatabase: Sendable {
             case .trash:
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                           userModificationDate, project, area
+                           userModificationDate, project, area, startDate
                     FROM TMTask
                     WHERE trashed = 1 AND type = 0
                     ORDER BY "index"
@@ -263,7 +263,7 @@ public final class ThingsDatabase: Sendable {
         return try db.read { db in
             let sql = """
                 SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                       userModificationDate, project, area
+                       userModificationDate, project, area, startDate
                 FROM TMTask
                 WHERE uuid = ? AND type = 0
                 """
@@ -276,6 +276,27 @@ public final class ThingsDatabase: Sendable {
         }
     }
 
+    /// Fetch recently created todos (non-completed, non-trashed) since a given date.
+    public func fetchRecent(since: Date) throws -> [Todo] {
+        let db = try openDatabase()
+        let sinceTimestamp = since.timeIntervalSinceReferenceDate
+
+        return try db.read { db in
+            let sql = """
+                SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
+                       userModificationDate, project, area, startDate
+                FROM TMTask
+                WHERE trashed = 0 AND type = 0 AND status != 3 AND creationDate > ?
+                ORDER BY creationDate DESC
+                """
+
+            let rows = try Row.fetchAll(db, sql: sql, arguments: [sinceTimestamp])
+            return try rows.map { row in
+                try self.todoFromRow(row, db: db)
+            }
+        }
+    }
+
     /// Search todos by text.
     public func search(query: String) throws -> [Todo] {
         let db = try openDatabase()
@@ -283,7 +304,7 @@ public final class ThingsDatabase: Sendable {
         return try db.read { db in
             let sql = """
                 SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                       userModificationDate, project, area
+                       userModificationDate, project, area, startDate
                 FROM TMTask
                 WHERE type = 0 AND trashed = 0
                       AND (title LIKE ? OR notes LIKE ?)
@@ -323,6 +344,10 @@ public final class ThingsDatabase: Sendable {
         let modificationDate: Date = (row["userModificationDate"] as Double?).flatMap {
             Date(timeIntervalSinceReferenceDate: $0)
         } ?? creationDate
+        // startDate is stored as days since reference date (Jan 1, 2001)
+        let scheduledDate: Date? = (row["startDate"] as Int?).flatMap { days in
+            Calendar.current.date(byAdding: .day, value: days, to: Date(timeIntervalSinceReferenceDate: 0))
+        }
 
         return Todo(
             id: uuid,
@@ -335,7 +360,8 @@ public final class ThingsDatabase: Sendable {
             area: area,
             checklistItems: checklistItems,
             creationDate: creationDate,
-            modificationDate: modificationDate
+            modificationDate: modificationDate,
+            scheduledDate: scheduledDate
         )
     }
 

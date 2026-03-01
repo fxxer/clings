@@ -21,6 +21,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var checklistItems: [ChecklistItem]
     public var creationDate: Date
     public var modificationDate: Date
+    public var scheduledDate: Date?
 
     public init(
         id: String,
@@ -33,7 +34,8 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         area: Area? = nil,
         checklistItems: [ChecklistItem] = [],
         creationDate: Date = Date(),
-        modificationDate: Date = Date()
+        modificationDate: Date = Date(),
+        scheduledDate: Date? = nil
     ) {
         self.id = id
         self.name = name
@@ -46,6 +48,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.checklistItems = checklistItems
         self.creationDate = creationDate
         self.modificationDate = modificationDate
+        self.scheduledDate = scheduledDate
     }
 
     enum CodingKeys: String, CodingKey {
@@ -60,6 +63,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         case checklistItems
         case creationDate
         case modificationDate
+        case scheduledDate
     }
 
     public init(from decoder: Decoder) throws {
@@ -82,6 +86,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         checklistItems = try container.decodeIfPresent([ChecklistItem].self, forKey: .checklistItems) ?? []
         creationDate = try container.decodeIfPresent(Date.self, forKey: .creationDate) ?? Date()
         modificationDate = try container.decodeIfPresent(Date.self, forKey: .modificationDate) ?? Date()
+        scheduledDate = try container.decodeIfPresent(Date.self, forKey: .scheduledDate)
     }
 
     // MARK: - Computed Properties
@@ -140,6 +145,8 @@ extension Todo: Filterable {
             return .optionalString(project?.name)
         case "area":
             return .optionalString(area?.name)
+        case "when", "scheduled", "startdate":
+            return .optionalDate(scheduledDate)
         case "created", "creationdate":
             return .date(creationDate)
         case "modified", "modificationdate":

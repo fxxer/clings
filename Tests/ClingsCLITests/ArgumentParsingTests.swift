@@ -381,6 +381,129 @@ struct ArgumentParsingTests {
         }
     }
 
+    @Suite("Recent Command")
+    struct RecentCommandParsing {
+        @Test func recentDefault() throws {
+            let command = try RecentCommand.parse([])
+            #expect(command.period == "7d")
+            #expect(!command.output.json)
+        }
+
+        @Test func recentWithPeriod() throws {
+            let command = try RecentCommand.parse(["3d"])
+            #expect(command.period == "3d")
+        }
+
+        @Test func recentWeek() throws {
+            let command = try RecentCommand.parse(["1w"])
+            #expect(command.period == "1w")
+        }
+
+        @Test func recentJson() throws {
+            let command = try RecentCommand.parse(["3d", "--json"])
+            #expect(command.period == "3d")
+            #expect(command.output.json)
+        }
+    }
+
+    @Suite("Trash Command")
+    struct TrashCommandParsing {
+        @Test func trashDefault() throws {
+            let command = try TrashCommand.parse([])
+            #expect(!command.output.json)
+            #expect(command.listView == .trash)
+        }
+
+        @Test func trashJson() throws {
+            let command = try TrashCommand.parse(["--json"])
+            #expect(command.output.json)
+        }
+    }
+
+    @Suite("Project Add Command")
+    struct ProjectAddCommandParsing {
+        @Test func requiresTitle() {
+            #expect(throws: Error.self) {
+                try ProjectAddCommand.parse([])
+            }
+        }
+
+        @Test func acceptsTitle() throws {
+            let command = try ProjectAddCommand.parse(["Q1 Planning"])
+            #expect(command.title == "Q1 Planning")
+        }
+
+        @Test func notesOption() throws {
+            let command = try ProjectAddCommand.parse(["Sprint", "--notes", "Planning sprint tasks"])
+            #expect(command.notes == "Planning sprint tasks")
+        }
+
+        @Test func areaOption() throws {
+            let command = try ProjectAddCommand.parse(["Sprint", "--area", "Work"])
+            #expect(command.area == "Work")
+        }
+
+        @Test func whenOption() throws {
+            let command = try ProjectAddCommand.parse(["Sprint", "--when", "today"])
+            #expect(command.when == "today")
+        }
+
+        @Test func deadlineOption() throws {
+            let command = try ProjectAddCommand.parse(["Sprint", "--deadline", "2026-03-31"])
+            #expect(command.deadline == "2026-03-31")
+        }
+
+        @Test func tagsOption() throws {
+            let command = try ProjectAddCommand.parse(["Sprint", "--tags", "work,planning"])
+            #expect(command.tags == "work,planning")
+        }
+
+        @Test func withJsonOutput() throws {
+            let command = try ProjectAddCommand.parse(["Sprint", "--json"])
+            #expect(command.output.json)
+        }
+
+        @Test func allOptions() throws {
+            let command = try ProjectAddCommand.parse([
+                "Q1 Planning",
+                "--notes", "Big quarter",
+                "--area", "Work",
+                "--when", "tomorrow",
+                "--deadline", "2026-03-31",
+            ])
+            #expect(command.title == "Q1 Planning")
+            #expect(command.notes == "Big quarter")
+            #expect(command.area == "Work")
+            #expect(command.when == "tomorrow")
+            #expect(command.deadline == "2026-03-31")
+        }
+    }
+
+    @Suite("Project Headings Command")
+    struct ProjectHeadingsCommandParsing {
+        @Test func requiresProject() {
+            #expect(throws: Error.self) {
+                try ProjectHeadingsCommand.parse([])
+            }
+        }
+
+        @Test func acceptsProjectName() throws {
+            let command = try ProjectHeadingsCommand.parse(["Week #9"])
+            #expect(command.project == "Week #9")
+        }
+
+        @Test func acceptsProjectUUID() throws {
+            let command = try ProjectHeadingsCommand.parse(["ABC123DEF456GHI789JKL0"])
+            #expect(command.project == "ABC123DEF456GHI789JKL0")
+        }
+
+        @Test func withJsonOutput() throws {
+            let command = try ProjectHeadingsCommand.parse(["My Project", "--json"])
+            #expect(command.project == "My Project")
+            #expect(command.output.json)
+        }
+    }
+
     @Suite("Stats Command")
     struct StatsCommandParsing {
         @Test func configuration() {
