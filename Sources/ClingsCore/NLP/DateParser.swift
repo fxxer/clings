@@ -24,20 +24,28 @@ public struct DateParser: Sendable {
         let now = Date()
         
         // 1. Handle simple relative terms manually for speed/precision
-        if lower == "today" {
+        // Supports English and Slovak
+        if lower == "today" || lower == "dnes" {
             return calendar.startOfDay(for: now)
         }
-        if lower == "tomorrow" {
+        if lower == "tomorrow" || lower == "zajtra" {
             return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
         }
-        if lower == "yesterday" {
+        if lower == "yesterday" || lower == "vcera" || lower == "včera" {
             return calendar.date(byAdding: .day, value: -1, to: calendar.startOfDay(for: now))
         }
         
         // 2. Handle "in X days" regex
-        // NSDataDetector is sometimes flaky with "in X days" without more context
-        if lower.hasPrefix("in ") && lower.hasSuffix(" days") {
-            let numberPart = lower.dropFirst(3).dropLast(5).trimmingCharacters(in: .whitespaces)
+        // Supports "in X days" and "o X dni"
+        if (lower.hasPrefix("in ") && lower.hasSuffix(" days")) ||
+           (lower.hasPrefix("o ") && (lower.hasSuffix(" dni") || lower.hasSuffix(" dní"))) {
+            let numberPart = lower
+                .replacingOccurrences(of: "in ", with: "")
+                .replacingOccurrences(of: " days", with: "")
+                .replacingOccurrences(of: "o ", with: "")
+                .replacingOccurrences(of: " dni", with: "")
+                .replacingOccurrences(of: " dní", with: "")
+                .trimmingCharacters(in: .whitespaces)
             if let days = Int(numberPart) {
                 return calendar.date(byAdding: .day, value: days, to: calendar.startOfDay(for: now))
             }

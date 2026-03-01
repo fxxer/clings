@@ -57,35 +57,46 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
-        let whenStr = when.map { iso8601DateString($0) }
-        let deadlineStr = deadline.map { iso8601DateString($0) }
-
-        let script = JXAScripts.createTodo(
-            name: name,
-            notes: notes,
-            when: whenStr,
-            deadline: deadlineStr,
-            tags: [],
-            project: project,
-            area: area,
-            checklistItems: checklistItems
-        )
-
-        let result = try await jxaBridge.executeJSON(script, as: CreationResult.self)
-        guard result.success, let id = result.id, !id.isEmpty else {
-            throw ThingsError.operationFailed(result.error ?? "Missing created todo ID")
+        var components = URLComponents(string: "things:///add")!
+        var queryItems = [URLQueryItem(name: "title", value: name)]
+        
+        if let notes = notes {
+            queryItems.append(URLQueryItem(name: "notes", value: notes))
         }
-
+        
+        if let when = when {
+            queryItems.append(URLQueryItem(name: "when", value: formatDateForURL(when)))
+        }
+        
+        if let deadline = deadline {
+            queryItems.append(URLQueryItem(name: "deadline", value: formatDateForURL(deadline)))
+        }
+        
         if !tags.isEmpty {
-            let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
-            do {
-                _ = try await jxaBridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
-            }
+            queryItems.append(URLQueryItem(name: "tags", value: tags.joined(separator: ",")))
         }
-
-        return id
+        
+        if let project = project {
+            queryItems.append(URLQueryItem(name: "list", value: project))
+        } else if let area = area {
+            queryItems.append(URLQueryItem(name: "list", value: area))
+        }
+        
+        if !checklistItems.isEmpty {
+            queryItems.append(URLQueryItem(name: "checklist-items", value: checklistItems.joined(separator: "\n")))
+        }
+        
+        // Finalize URL
+        components.queryItems = queryItems
+        guard let url = components.url else {
+            throw ThingsError.operationFailed("Could not construct Things URL")
+        }
+        
+        // Execute via AppleScript (most reliable way to open custom URLs silently)
+        let script = "open location \"\(url.absoluteString)\""
+        _ = try await jxaBridge.executeAppleScript(script)
+        
+        return "sent-via-url-scheme"
     }
 
     public func createProject(
@@ -96,32 +107,44 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         tags: [String],
         area: String?
     ) async throws -> String {
-        let script = JXAScripts.createProject(
-            name: name,
-            notes: notes,
-            when: when,
-            deadline: deadline,
-            area: area
-        )
-
-        let result = try await jxaBridge.executeJSON(script, as: CreationResult.self)
-        if !result.success {
-            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        var components = URLComponents(string: "things:///add-project")!
+        var queryItems = [URLQueryItem(name: "title", value: name)]
+        
+        if let notes = notes {
+            queryItems.append(URLQueryItem(name: "notes", value: notes))
         }
-        guard let id = result.id else {
-            throw ThingsError.operationFailed("Missing created project ID")
+        
+        if let when = when {
+            queryItems.append(URLQueryItem(name: "when", value: formatDateForURL(when)))
         }
-
+        
+        if let deadline = deadline {
+            queryItems.append(URLQueryItem(name: "deadline", value: formatDateForURL(deadline)))
+        }
+        
         if !tags.isEmpty {
-            let tagScript = JXAScripts.setProjectTagsAppleScript(id: id, tags: tags)
-            do {
-                _ = try await jxaBridge.executeAppleScript(tagScript)
-            } catch let error as JXAError {
-                throw ThingsError.jxaError(error)
-            }
+            queryItems.append(URLQueryItem(name: "tags", value: tags.joined(separator: ",")))
         }
+        
+        if let area = area {
+            queryItems.append(URLQueryItem(name: "area", value: area))
+        }
+        
+        components.queryItems = queryItems
+        guard let url = components.url else {
+            throw ThingsError.operationFailed("Could not construct Things URL")
+        }
+        
+        let script = "open location \"\(url.absoluteString)\""
+        _ = try await jxaBridge.executeAppleScript(script)
+        
+        return "sent-via-url-scheme"
+    }
 
-        return id
+    private func formatDateForURL(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
     }
 
     public func completeTodo(id: String) async throws {

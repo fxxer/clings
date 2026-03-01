@@ -299,6 +299,78 @@ public enum JXAScripts {
     }
 
     /// Create a new todo with the given properties via AppleScript.
+    public static func createTodoAppleScript(
+        name: String,
+        notes: String? = nil,
+        when: (year: Int, month: Int, day: Int)? = nil,
+        deadline: (year: Int, month: Int, day: Int)? = nil,
+        project: String? = nil,
+        area: String? = nil,
+        checklistItems: [String] = []
+    ) -> String {
+        var script = """
+        tell application "Things3"
+            set newTodo to make new to do with properties {name:"\(name.appleScriptEscaped)"}
+        """
+        
+        if let notes = notes {
+            script += "\n    set notes of newTodo to \"\(notes.appleScriptEscaped)\""
+        }
+        
+        if let when = when {
+            script += """
+            
+                set theDate to current date
+                set year of theDate to \(when.year)
+                set month of theDate to \(when.month)
+                set day of theDate to \(when.day)
+                set time of theDate to 0
+                set activation date of newTodo to theDate
+            """
+        }
+        
+        if let deadline = deadline {
+            script += """
+            
+                set theDate to current date
+                set year of theDate to \(deadline.year)
+                set month of theDate to \(deadline.month)
+                set day of theDate to \(deadline.day)
+                set time of theDate to 0
+                set deadline of newTodo to theDate
+            """
+        }
+        
+        if let project = project {
+            script += """
+            
+                if exists project "\(project.appleScriptEscaped)" then
+                    set project of newTodo to project "\(project.appleScriptEscaped)"
+                end if
+            """
+        } else if let area = area {
+            script += """
+            
+                if exists area "\(area.appleScriptEscaped)" then
+                    set area of newTodo to area "\(area.appleScriptEscaped)"
+                end if
+            """
+        }
+        
+        for item in checklistItems {
+            script += "\n    make new checklist item with properties {name:\"\(item.appleScriptEscaped)\"} at checklist items of newTodo"
+        }
+        
+        script += """
+        
+            return id of newTodo
+        end tell
+        """
+        
+        return script
+    }
+    
+    // Keeping JXA createTodo as legacy or for non-AppleScript use if needed
     public static func createTodo(
         name: String,
         notes: String? = nil,
@@ -314,19 +386,42 @@ public enum JXAScripts {
         let checklistJS = checklistItems.isEmpty ? "" : """
             const checklistItems = [\(checklistItems.map { "'\($0.jxaEscaped)'" }.joined(separator: ", "))];
             checklistItems.forEach(function(itemName) {
-                app.make({ new: 'to do', withProperties: { name: itemName }, at: todo.toDos });
+                app.make({ 
+                    new: 'checklist item', 
+                    withProperties: { name: itemName }, 
+                    at: todo.checklistItems 
+                });
             });
             """
 
         return """
         (() => {
             const app = Application('Things3');
-            const props = { name: '\(name.jxaEscaped)'\(notes != nil ? ", notes: '\(notes!.jxaEscaped)'" : "")\(when != nil ? ", activationDate: new Date('\(when!.jxaEscaped)')" : "")\(deadline != nil ? ", dueDate: new Date('\(deadline!.jxaEscaped)')" : "") };
+            
+            // Create the basic todo first to avoid 'Can't make class' errors with complex props
+            const todo = app.make({ new: 'to do', withProperties: { name: '\(name.jxaEscaped)' } });
 
-            const todo = app.make({ new: 'to do', withProperties: props });
+            // Set optional properties safely
+            \(notes != nil ? "todo.notes = '\(notes!.jxaEscaped)';" : "")
+            \(when != nil ? "todo.activationDate = new Date('\(when!.jxaEscaped)');" : "")
+            \(deadline != nil ? "todo.dueDate = new Date('\(deadline!.jxaEscaped)');" : "")
 
-            \(project != nil ? "const project = app.projects.byName('\(project!.jxaEscaped)'); if (project.exists()) { todo.project = project; }" : "")
-            \(area != nil ? "const area = app.areas.byName('\(area!.jxaEscaped)'); if (area.exists()) { todo.area = area; }" : "")
+            // Set project or area
+            \(project != nil ? """
+            const project = app.projects.byName('\(project!.jxaEscaped)');
+            if (project.exists()) {
+                todo.project = project;
+            }
+            """ : "")
+            
+            \(area != nil ? """
+            const area = app.areas.byName('\(area!.jxaEscaped)');
+            if (area.exists()) {
+                todo.area = area;
+            }
+            """ : "")
+
+            // Add checklist items
             \(checklistJS)
 
             return JSON.stringify({ success: true, id: todo.id(), name: todo.name() });
@@ -334,6 +429,65 @@ public enum JXAScripts {
         """
     }
 
+    /// Create a new project with the given properties via AppleScript.
+    public static func createProjectAppleScript(
+        name: String,
+        notes: String? = nil,
+        when: (year: Int, month: Int, day: Int)? = nil,
+        deadline: (year: Int, month: Int, day: Int)? = nil,
+        area: String? = nil
+    ) -> String {
+        var script = """
+        tell application "Things3"
+            set newProject to make new project with properties {name:"\(name.appleScriptEscaped)"}
+        """
+        
+        if let notes = notes {
+            script += "\n    set notes of newProject to \"\(notes.appleScriptEscaped)\""
+        }
+        
+        if let when = when {
+            script += """
+            
+                set theDate to current date
+                set year of theDate to \(when.year)
+                set month of theDate to \(when.month)
+                set day of theDate to \(when.day)
+                set time of theDate to 0
+                set activation date of newProject to theDate
+            """
+        }
+        
+        if let deadline = deadline {
+            script += """
+            
+                set theDate to current date
+                set year of theDate to \(deadline.year)
+                set month of theDate to \(deadline.month)
+                set day of theDate to \(deadline.day)
+                set time of theDate to 0
+                set deadline of newProject to theDate
+            """
+        }
+        
+        if let area = area {
+            script += """
+            
+                if exists area "\(area.appleScriptEscaped)" then
+                    set area of newProject to area "\(area.appleScriptEscaped)"
+                end if
+            """
+        }
+        
+        script += """
+        
+            return id of newProject
+        end tell
+        """
+        
+        return script
+    }
+    
     /// Create a new project with the given properties.
     public static func createProject(
         name: String,
