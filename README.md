@@ -47,7 +47,7 @@ clings add "review PR // needs careful testing - check auth - verify tests"
 # - Dates: today, tomorrow, next monday, in 3 days, dec 15
 # - Times: 3pm, 15:00, morning, evening
 # - Tags: #tag1 #tag2
-# - Projects: for ProjectName
+# - Projects: for ProjectName or @ProjectName
 # - Areas: in AreaName
 # - Deadlines: by friday
 # - Priority: !high, !!, !!!
@@ -64,7 +64,11 @@ clings add "Task title" \
   --tags work urgent \
   --project "Sprint 1" \
   --area "Work" \
-  --notes "Additional context"
+  --notes "Additional context" \
+  --checklist "Step 1" --checklist "Step 2"
+
+# Add todo under a heading in a project (heading must already exist)
+clings add "Task" --project "Week #9" --heading "Personal"
 
 # Preview without creating
 clings add "Test task tomorrow #work" --parse-only
@@ -108,7 +112,8 @@ clings update <ID> --tags work urgent
 
 # Schedule and organize (requires auth token, see Configuration)
 clings update <ID> --when tomorrow
-clings update <ID> --heading "Waiting on them"
+clings update <ID> --heading "Personal"
+clings update <ID> --project "Week #9" --heading "Career"
 clings update <ID> --when today --heading "In Progress"
 
 # Complete, cancel, or delete
@@ -119,7 +124,34 @@ clings delete <ID>               # or: clings rm <ID>
 clings delete <ID> --force       # skip confirmation
 ```
 
-### 5. Bulk Operations
+### 5. Project Management
+
+Create and manage projects:
+
+```bash
+# List all projects
+clings project list              # or: clings projects
+
+# Create a project
+clings project add "Q1 Planning"
+clings project add "Week #9" --area "Priority"
+clings project add "Sprint" --area "Work" --deadline 2025-01-31
+
+# Create a project with headings already in place
+clings project add "Week #9" \
+  --heading "Personal" \
+  --heading "Career" \
+  --heading "Family"
+
+# List headings in a project (by name or UUID)
+clings project headings "Week #9"
+clings project headings <uuid>
+clings project headings "Week #9" --json
+```
+
+> **Note:** Headings can only be created at project creation time via `--heading`. To add headings to an existing project, use the Things 3 app directly.
+
+### 6. Bulk Operations
 
 Perform operations on multiple tasks using powerful filters.
 
@@ -147,7 +179,7 @@ clings bulk move --where "tags CONTAINS 'work'" --to "Work Project"
 - `--yes` - Skip confirmation prompts (use with caution)
 - `--list` - Specify which list to operate on (default: today)
 
-### 6. Statistics Dashboard
+### 7. Statistics Dashboard
 
 Track your productivity:
 
@@ -158,7 +190,7 @@ clings stats heatmap      # Activity heatmap calendar
 clings stats --days 7     # Limit to last 7 days
 ```
 
-### 7. Weekly Review
+### 8. Weekly Review
 
 Guide yourself through a GTD-style weekly review:
 
@@ -169,7 +201,7 @@ clings review status      # Show last review session info
 clings review clear       # Clear review session
 ```
 
-### 8. Shell Completions
+### 9. Shell Completions
 
 Generate shell completions:
 
@@ -179,7 +211,7 @@ clings completions zsh > ~/.zfunc/_clings
 clings completions fish > ~/.config/fish/completions/clings.fish
 ```
 
-### 9. Configuration
+### 10. Configuration
 
 Set up the Things 3 auth token for features that use the Things URL scheme (`--when`, `--heading`):
 
@@ -193,6 +225,16 @@ clings config set-auth-token <your-token>
 
 The auth token is stored at `~/.config/clings/auth-token` with restricted permissions (0600).
 
+**Commands requiring auth token:**
+- `clings update <ID> --when <date>` — schedule a todo
+- `clings update <ID> --heading <name>` — move todo under a heading
+
+**Commands that do NOT require auth token:**
+- All read commands
+- `clings add` (including `--heading`, `--checklist`)
+- `clings project add` (including `--heading`)
+- `clings complete`, `cancel`, `delete`
+
 ## Requirements
 
 - **macOS 10.15 (Catalina) or later**
@@ -201,30 +243,18 @@ The auth token is stored at `~/.config/clings/auth-token` with restricted permis
 
 ## Installation
 
-### Homebrew (Recommended)
-
-```bash
-brew install dan-hart/tap/clings
-```
-
-To upgrade to the latest version:
-
-```bash
-brew update && brew upgrade clings
-```
-
 ### From Source
 
 ```bash
 # Clone the repository
-git clone https://github.com/dan-hart/clings
+git clone https://github.com/fxxer/clings
 cd clings
 
 # Build release binary
 swift build -c release
 
-# Install to /usr/local/bin
-cp .build/release/clings /usr/local/bin/
+# Install
+sudo cp .build/release/clings /usr/local/bin/
 ```
 
 ## Quick Start
@@ -236,6 +266,9 @@ clings today
 # Add a quick task
 clings add "buy groceries tomorrow #errands"
 
+# Add a task under a heading in a project
+clings add "Review PRs" --project "Work" --heading "Morning"
+
 # View your inbox
 clings inbox
 
@@ -245,12 +278,16 @@ clings search "project"
 # Filter by status and date
 clings filter "due < today AND status = open"
 
+# List headings in a project
+clings project headings "Week #9"
+
 # Get productivity stats
 clings stats
 
 # Get help on any command
 clings --help
 clings add --help
+clings project --help
 ```
 
 ## Command Reference
@@ -275,17 +312,19 @@ clings add --help
 | `someday` | `s` | Show someday todos |
 | `logbook` | `l` | Show completed todos |
 | `projects` | - | List all projects |
+| `project list` | `project ls` | List all projects |
+| `project add` | - | Create a new project (supports `--heading`) |
+| `project headings` | - | List headings in a project |
 | `areas` | - | List all areas |
 | `tags` | - | Manage tags |
 | `show` | - | Show details of a todo by ID |
-| `add` | - | Add a new todo with natural language |
-| `update` | - | Update a todo's properties |
+| `add` | - | Add a new todo (supports `--heading`, `--checklist`) |
+| `update` | - | Update a todo's properties (supports `--when`, `--heading`) |
 | `complete` | `done` | Mark a todo as completed |
 | `cancel` | - | Cancel a todo |
 | `delete` | `rm` | Delete a todo (moves to trash) |
 | `search` | `find`, `f` | Search todos by text |
 | `filter` | - | Filter todos using SQL-like expressions |
-| `open` | - | Open Things 3 to a view or item |
 | `bulk` | - | Bulk operations on multiple todos |
 | `stats` | - | View productivity statistics |
 | `review` | - | GTD weekly review workflow (start, status, clear) |
@@ -312,13 +351,15 @@ Machine-readable JSON for scripting:
 
 ```bash
 clings today --json | jq '.items[] | select(.tags | contains(["work"]))'
+clings project headings "Week #9" --json | jq '.items[].title'
 ```
 
 ## Data Safety
 
-- **Read operations:** Use direct SQLite access to the Things 3 database (read-only)
+- **Read operations:** Use direct SQLite access to the Things 3 database (read-only, fast)
 - **Write operations:** Use Apple's JavaScript for Automation (JXA) through the official Things 3 API
-- **Scheduling and headings:** Use the Things 3 URL scheme (requires auth token) since `activationDate` is read-only in JXA
+- **Scheduling and heading moves:** Use the Things 3 URL scheme (requires auth token) since `activationDate` is read-only in JXA
+- **New todos under headings:** Use `things:///add` URL scheme (no auth token required)
 - **No direct database writes:** clings never writes directly to the Things 3 database
 
 ### Best Practices
@@ -339,14 +380,24 @@ Then enable Things 3 under your terminal application.
 
 ### Things 3 not running
 
-Things 3 must be running for clings to communicate with it via AppleScript/JXA.
+Things 3 must be running for write operations (JXA). Read operations work even when Things 3 is closed.
+
+### Auth token errors
+
+```bash
+# Re-set the auth token
+clings config set-auth-token <your-token>
+
+# Token is stored at:
+cat ~/.config/clings/auth-token
+```
 
 ## Development
 
 ```bash
 swift build              # Build
 swift run clings today   # Run in debug mode
-swift test               # Run tests
+swift test               # Run tests (473 tests)
 ```
 
 See [CLAUDE.md](CLAUDE.md) for detailed development guidelines.
@@ -368,6 +419,6 @@ GNU General Public License v3.0 (GPLv3) - see [LICENSE](LICENSE)
 
 ## Links
 
-- **Fork:** https://github.com/drewburchfield/clings
-- **Upstream:** https://github.com/dan-hart/clings
+- **This fork:** https://github.com/fxxer/clings
+- **Upstream:** https://github.com/drewburchfield/clings
 - **Things 3:** https://culturedcode.com/things/
