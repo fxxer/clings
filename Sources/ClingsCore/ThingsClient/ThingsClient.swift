@@ -4,43 +4,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 import Foundation
+#if os(macOS)
+import AppKit
+#endif
 
-/// Errors that can occur when interacting with Things 3.
-public enum ThingsError: Error, LocalizedError {
-    case notFound(String)
-    case operationFailed(String)
-    case invalidState(String)
-    case jxaError(JXAError)
-
-    public var errorDescription: String? {
-        switch self {
-        case .notFound(let id):
-            return "Item not found: \(id)"
-        case .operationFailed(let msg):
-            return "Operation failed: \(msg)"
-        case .invalidState(let msg):
-            return "Invalid state: \(msg)"
-        case .jxaError(let error):
-            return error.localizedDescription
-        }
-    }
-}
-
-/// Protocol for Things 3 client operations.
-///
-/// This protocol allows for mocking in tests.
+/// Protocol defining the interface for interacting with Things 3.
 public protocol ThingsClientProtocol: Sendable {
-    // Lists
+    // MARK: - Reads
     func fetchList(_ list: ListView) async throws -> [Todo]
     func fetchProjects() async throws -> [Project]
     func fetchAreas() async throws -> [Area]
     func fetchTags() async throws -> [Tag]
     func fetchHeadings(projectId: String) async throws -> [Heading]
-
-    // Single item
     func fetchTodo(id: String) async throws -> Todo
+    func search(query: String) async throws -> [Todo]
 
-    // Mutations
+    // MARK: - Writes
     func createTodo(
         name: String,
         notes: String?,
@@ -49,43 +28,50 @@ public protocol ThingsClientProtocol: Sendable {
         tags: [String],
         project: String?,
         area: String?,
+        heading: String?,
         checklistItems: [String]
     ) async throws -> String
+
     func createProject(
         name: String,
         notes: String?,
         when: Date?,
         deadline: Date?,
         tags: [String],
-        area: String?
+        area: String?,
+        headings: [String]
     ) async throws -> String
+
+    func updateProject(
+        id: String,
+        notes: String?,
+        status: Status?
+    ) async throws
+
     func completeTodo(id: String) async throws
     func cancelTodo(id: String) async throws
     func deleteTodo(id: String) async throws
-    func moveTodo(id: String, toProject: String) async throws
+    func moveTodo(id: String, toProject projectName: String) async throws
     func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws
 
-    // Search
-    func search(query: String) async throws -> [Todo]
-
-    // Tag management
+    // MARK: - Tag Management
     func createTag(name: String) async throws -> Tag
     func deleteTag(name: String) async throws
     func renameTag(oldName: String, newName: String) async throws
 
-    // Open (disabled)
+    // MARK: - Open
     func openInThings(id: String) throws
     func openInThings(list: ListView) throws
 }
 
-/// Result from a mutation operation.
+/// JXA response for mutation operations.
 struct MutationResult: Decodable {
     let success: Bool
     let error: String?
     let id: String?
 }
 
-/// Result from a creation operation.
+/// JXA response for creation operations.
 struct CreationResult: Decodable {
     let success: Bool
     let error: String?
@@ -148,8 +134,16 @@ public actor ThingsClient: ThingsClientProtocol {
     }
 
     public func fetchHeadings(projectId: String) async throws -> [Heading] {
-        // Headings are not accessible via JXA — requires SQLite (HybridThingsClient).
         throw ThingsError.invalidState("fetchHeadings requires SQLite access (HybridThingsClient)")
+    }
+
+    public func search(query: String) async throws -> [Todo] {
+        let script = JXAScripts.search(query: query)
+        do {
+            return try await bridge.executeJSON(script, as: [Todo].self)
+        } catch let error as JXAError {
+            throw ThingsError.jxaError(error)
+        }
     }
 
     // MARK: - Single Item
@@ -162,7 +156,6 @@ public actor ThingsClient: ThingsClientProtocol {
             throw ThingsError.operationFailed("Invalid response")
         }
 
-        // Check if it's an error response
         if (try? JSONDecoder().decode(ErrorResponse.self, from: data)) != nil {
             throw ThingsError.notFound(id)
         }
@@ -187,6 +180,7 @@ public actor ThingsClient: ThingsClientProtocol {
         tags: [String],
         project: String?,
         area: String?,
+        heading: String?,
         checklistItems: [String]
     ) async throws -> String {
         let whenStr = when.map { iso8601DateString($0) }
@@ -226,7 +220,8 @@ public actor ThingsClient: ThingsClientProtocol {
         when: Date?,
         deadline: Date?,
         tags: [String],
-        area: String?
+        area: String?,
+        headings: [String]
     ) async throws -> String {
         let script = JXAScripts.createProject(
             name: name,
@@ -254,6 +249,37 @@ public actor ThingsClient: ThingsClientProtocol {
         }
 
         return id
+    }
+
+    public func updateProject(
+        id: String,
+        notes: String?,
+        status: Status?
+    ) async throws {
+        var script = """
+        (() => {
+            const app = Application('Things3');
+            const project = app.projects.byId('\(id.jxaEscaped)');
+            if (!project.exists()) return JSON.stringify({ success: false, error: 'Project not found' });
+        """
+        
+        if let notes = notes {
+            script += "\n    project.notes = '\(notes.jxaEscaped)';"
+        }
+        
+        if let status = status {
+            switch status {
+            case .completed: script += "\n    project.status = 'completed';"
+            case .canceled: script += "\n    project.status = 'canceled';"
+            default: break
+            }
+        }
+        
+        script += """
+            return JSON.stringify({ success: true });
+        })()
+        """
+        _ = try await bridge.executeJSON(script, as: MutationResult.self)
     }
 
     public func completeTodo(id: String) async throws {
@@ -289,7 +315,6 @@ public actor ThingsClient: ThingsClientProtocol {
     }
 
     public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
-        // Handle non-tag updates via JXA (name, notes, dueDate work fine)
         if name != nil || notes != nil || dueDate != nil {
             let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
             let result = try await bridge.executeJSON(script, as: MutationResult.self)
@@ -305,17 +330,6 @@ public actor ThingsClient: ThingsClientProtocol {
             } catch let error as JXAError {
                 throw ThingsError.jxaError(error)
             }
-        }
-    }
-
-    // MARK: - Search
-
-    public func search(query: String) async throws -> [Todo] {
-        let script = JXAScripts.search(query: query)
-        do {
-            return try await bridge.executeJSON(script, as: [Todo].self)
-        } catch let error as JXAError {
-            throw ThingsError.jxaError(error)
         }
     }
 
@@ -349,19 +363,37 @@ public actor ThingsClient: ThingsClientProtocol {
         }
     }
 
-    // MARK: - Open (disabled)
+    // MARK: - Open
 
     public nonisolated func openInThings(id: String) throws {
-        throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
+        let urlString = "things:///show?id=\(id)"
+        guard let url = URL(urlString: urlString) else {
+            throw ThingsError.operationFailed("Invalid URL: \(urlString)")
+        }
+        #if os(macOS)
+        NSWorkspace.shared.open(url)
+        #endif
     }
 
     public nonisolated func openInThings(list: ListView) throws {
-        throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
+        let urlString = "things:///show?id=\(list.displayName.lowercased())"
+        guard let url = URL(urlString: urlString) else {
+            throw ThingsError.operationFailed("Invalid URL: \(urlString)")
+        }
+        #if os(macOS)
+        NSWorkspace.shared.open(url)
+        #endif
     }
 
     private func iso8601DateString(_ date: Date) -> String {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         return formatter.string(from: date)
+    }
+}
+
+fileprivate extension URL {
+    init?(urlString: String) {
+        self.init(string: urlString.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? urlString)
     }
 }

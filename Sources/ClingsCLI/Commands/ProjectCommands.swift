@@ -30,6 +30,7 @@ struct ProjectCommand: AsyncParsableCommand {
         subcommands: [
             ProjectListCommand.self,
             ProjectAddCommand.self,
+            ProjectUpdateCommand.self,
             ProjectHeadingsCommand.self,
         ],
         defaultSubcommand: ProjectListCommand.self
@@ -94,6 +95,9 @@ struct ProjectAddCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Tags (comma-separated)")
     var tags: String?
 
+    @Option(name: .long, parsing: .upToNextOption, help: "Headings for the project")
+    var heading: [String] = []
+
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
@@ -115,7 +119,8 @@ struct ProjectAddCommand: AsyncParsableCommand {
             when: parsedWhen,
             deadline: parsedDeadline,
             tags: tagList,
-            area: area
+            area: area,
+            headings: heading
         )
 
         let formatter: OutputFormatter = output.json
@@ -144,6 +149,57 @@ struct ProjectAddCommand: AsyncParsableCommand {
             return date
         }
         throw ThingsError.invalidState("Invalid date format: \(str). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
+    }
+}
+
+// MARK: - Project Update Command
+
+struct ProjectUpdateCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "update",
+        abstract: "Update an existing project",
+        discussion: """
+        Update project properties. Accepts project name or UUID.
+
+        EXAMPLES:
+          clings project update "Sprint" --notes "New project notes"
+          clings project update <uuid> --complete
+          clings project update "Old Project" --cancel
+        """
+    )
+
+    @Argument(help: "Project name or UUID")
+    var project: String
+
+    @Option(name: .long, help: "Set new notes for the project")
+    var notes: String?
+
+    @Flag(name: .long, help: "Mark the project as completed")
+    var complete = false
+
+    @Flag(name: .long, help: "Mark the project as canceled")
+    var cancel = false
+
+    @OptionGroup var output: OutputOptions
+
+    func run() async throws {
+        let client = ThingsClientFactory.create()
+        
+        var status: Status?
+        if complete { status = .completed }
+        if cancel { status = .canceled }
+
+        try await client.updateProject(
+            id: project,
+            notes: notes,
+            status: status
+        )
+
+        let formatter: OutputFormatter = output.json
+            ? JSONOutputFormatter()
+            : TextOutputFormatter(useColors: !output.noColor)
+
+        print(formatter.format(message: "Updated project: \(project)"))
     }
 }
 

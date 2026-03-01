@@ -39,6 +39,9 @@ struct AddCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Add to a project")
     var project: String?
 
+    @Option(name: .long, help: "Add to a heading within the project")
+    var heading: String?
+
     @Option(name: .long, help: "Add to an area")
     var area: String?
 
@@ -64,6 +67,10 @@ struct AddCommand: AsyncParsableCommand {
         if let area = area {
             parsed.area = area
         }
+        
+        // Command line --heading option
+        let targetHeading = heading
+
         if let when = when {
             parsed.whenDate = parseSimpleDate(when)
         }
@@ -86,6 +93,7 @@ struct AddCommand: AsyncParsableCommand {
             tags: parsed.tags,
             project: parsed.project,
             area: parsed.area,
+            heading: targetHeading,
             checklistItems: parsed.checklistItems
         )
 

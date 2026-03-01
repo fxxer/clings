@@ -45,7 +45,7 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         try database.search(query: query)
     }
 
-    // MARK: - Writes (via JXA - safe)
+    // MARK: - Writes (via URL Scheme - robust)
 
     public func createTodo(
         name: String,
@@ -55,10 +55,13 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         tags: [String],
         project: String?,
         area: String?,
+        heading: String?,
         checklistItems: [String]
     ) async throws -> String {
         var components = URLComponents(string: "things:///add")!
         var queryItems = [URLQueryItem(name: "title", value: name)]
+        
+        appendAuthToken(to: &queryItems)
         
         if let notes = notes {
             queryItems.append(URLQueryItem(name: "notes", value: notes))
@@ -82,17 +85,19 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
             queryItems.append(URLQueryItem(name: "list", value: area))
         }
         
+        if let heading = heading {
+            queryItems.append(URLQueryItem(name: "heading", value: heading))
+        }
+        
         if !checklistItems.isEmpty {
             queryItems.append(URLQueryItem(name: "checklist-items", value: checklistItems.joined(separator: "\n")))
         }
         
-        // Finalize URL
         components.queryItems = queryItems
         guard let url = components.url else {
             throw ThingsError.operationFailed("Could not construct Things URL")
         }
         
-        // Execute via AppleScript (most reliable way to open custom URLs silently)
         let script = "open location \"\(url.absoluteString)\""
         _ = try await jxaBridge.executeAppleScript(script)
         
@@ -105,10 +110,25 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         when: Date?,
         deadline: Date?,
         tags: [String],
-        area: String?
+        area: String?,
+        headings: [String]
     ) async throws -> String {
+        if !headings.isEmpty {
+            return try await createProjectWithHeadingsJSON(
+                name: name,
+                notes: notes,
+                when: when,
+                deadline: deadline,
+                tags: tags,
+                area: area,
+                headings: headings
+            )
+        }
+
         var components = URLComponents(string: "things:///add-project")!
         var queryItems = [URLQueryItem(name: "title", value: name)]
+        
+        appendAuthToken(to: &queryItems)
         
         if let notes = notes {
             queryItems.append(URLQueryItem(name: "notes", value: notes))
@@ -141,11 +161,78 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         return "sent-via-url-scheme"
     }
 
-    private func formatDateForURL(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        return formatter.string(from: date)
+    public func updateProject(
+        id: String,
+        notes: String?,
+        status: Status?
+    ) async throws {
+        var components = URLComponents(string: "things:///update-project")!
+        var queryItems = [URLQueryItem(name: "id", value: id)]
+        
+        appendAuthToken(to: &queryItems)
+        
+        if let notes = notes {
+            queryItems.append(URLQueryItem(name: "notes", value: notes))
+        }
+        
+        if let status = status {
+            switch status {
+            case .completed: queryItems.append(URLQueryItem(name: "completed", value: "true"))
+            case .canceled: queryItems.append(URLQueryItem(name: "canceled", value: "true"))
+            default: break
+            }
+        }
+        
+        components.queryItems = queryItems
+        guard let url = components.url else {
+            throw ThingsError.operationFailed("Could not construct update URL")
+        }
+        
+        let script = "open location \"\(url.absoluteString)\""
+        _ = try await jxaBridge.executeAppleScript(script)
     }
+
+    private func createProjectWithHeadingsJSON(
+        name: String,
+        notes: String?,
+        when: Date?,
+        deadline: Date?,
+        tags: [String],
+        area: String?,
+        headings: [String]
+    ) async throws -> String {
+        let headingItems = headings.map { [ "type": "heading", "attributes": ["title": $0] ] }
+        
+        var projectAttributes: [String: Any] = ["title": name]
+        if let notes = notes { projectAttributes["notes"] = notes }
+        if let when = when { projectAttributes["when"] = formatDateForURL(when) }
+        if let deadline = deadline { projectAttributes["deadline"] = formatDateForURL(deadline) }
+        if !tags.isEmpty { projectAttributes["tags"] = tags }
+        if let area = area { projectAttributes["area"] = area }
+        
+        projectAttributes["items"] = headingItems
+        
+        let projectJson: [String: Any] = [
+            "type": "project",
+            "attributes": projectAttributes
+        ]
+        
+        let data = try JSONSerialization.data(withJSONObject: [projectJson], options: [])
+        let jsonString = String(data: data, encoding: .utf8)!
+        
+        var components = URLComponents(string: "things:///json")!
+        var queryItems = [URLQueryItem(name: "data", value: jsonString)]
+        
+        appendAuthToken(to: &queryItems)
+        components.queryItems = queryItems
+        
+        let script = "open location \"\(components.url!.absoluteString)\""
+        _ = try await jxaBridge.executeAppleScript(script)
+        
+        return "sent-via-json-url"
+    }
+
+    // MARK: - Non-URL operations (JXA/AppleScript)
 
     public func completeTodo(id: String) async throws {
         let script = JXAScripts.completeTodo(id: id)
@@ -180,7 +267,6 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
     }
 
     public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
-        // Handle non-tag updates via JXA (name, notes, dueDate work fine)
         if name != nil || notes != nil || dueDate != nil {
             let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
             let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
@@ -229,6 +315,20 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         }
     }
 
+    // MARK: - Helpers
+
+    private func formatDateForURL(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.string(from: date)
+    }
+
+    private func appendAuthToken(to queryItems: inout [URLQueryItem]) {
+        if let token = try? AuthTokenStore.loadToken() {
+            queryItems.append(URLQueryItem(name: "auth-token", value: token))
+        }
+    }
+
     // MARK: - Open (disabled)
 
     public nonisolated func openInThings(id: String) throws {
@@ -237,12 +337,6 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
 
     public nonisolated func openInThings(list: ListView) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
-    }
-
-    private func iso8601DateString(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.string(from: date)
     }
 }
 
@@ -253,7 +347,6 @@ public enum ThingsClientFactory {
         do {
             return try HybridThingsClient()
         } catch {
-            // Fall back to JXA-only client if database not available
             return ThingsClient()
         }
     }
