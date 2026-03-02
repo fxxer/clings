@@ -367,8 +367,8 @@ struct OutputFormatterTests {
             let formatter = TextOutputFormatter(useColors: false)
             let output = formatter.format(todo: TestData.todoOpen)
 
-            // Should contain formatted due date
-            #expect(output.contains("Due:"))
+            // Should contain formatted deadline date
+            #expect(output.contains("Deadline:"))
         }
     }
 }

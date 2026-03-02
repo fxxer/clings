@@ -51,7 +51,7 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
     private(set) var moveOperations: [(String, String)] = []
 
     /// Track update operations.
-    private(set) var updateOperations: [(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?)] = []
+    private(set) var updateOperations: [(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?)] = []
 
     /// Track created todos (name, id).
     private(set) var createdTodos: [(String, String)] = []
@@ -129,9 +129,17 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         return id
     }
 
+    /// Track which todo IDs were reopened.
+    private(set) var reopenedIds: [String] = []
+
     func completeTodo(id: String) async throws {
         if let error = errorToThrow { throw error }
         completedIds.append(id)
+    }
+
+    func reopenTodo(id: String) async throws {
+        if let error = errorToThrow { throw error }
+        reopenedIds.append(id)
     }
 
     func cancelTodo(id: String) async throws {
@@ -149,9 +157,9 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         moveOperations.append((id, projectName))
     }
 
-    func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
+    func updateTodo(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws {
         if let error = errorToThrow { throw error }
-        updateOperations.append((id, name, notes, dueDate, tags))
+        updateOperations.append((id, name, notes, deadlineDate, tags))
     }
 
     func search(query: String) async throws -> [Todo] {
@@ -203,6 +211,7 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
     func reset() {
         fetchedLists = []
         completedIds = []
+        reopenedIds = []
         canceledIds = []
         deletedIds = []
         moveOperations = []

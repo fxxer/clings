@@ -14,7 +14,7 @@ struct TodoTests {
     struct Initialization {
         @Test func withAllParameters() {
             let now = Date()
-            let dueDate = now.addingTimeInterval(86400)
+            let deadlineDate = now.addingTimeInterval(86400)
             let tag = Tag(name: "test")
             let project = Project(id: "p1", name: "Test Project")
             let area = Area(id: "a1", name: "Test Area")
@@ -25,7 +25,7 @@ struct TodoTests {
                 name: "Test Todo",
                 notes: "Some notes",
                 status: .open,
-                dueDate: dueDate,
+                deadlineDate: deadlineDate,
                 tags: [tag],
                 project: project,
                 area: area,
@@ -38,7 +38,7 @@ struct TodoTests {
             #expect(todo.name == "Test Todo")
             #expect(todo.notes == "Some notes")
             #expect(todo.status == .open)
-            #expect(todo.dueDate == dueDate)
+            #expect(todo.deadlineDate == deadlineDate)
             #expect(todo.tags.count == 1)
             #expect(todo.project?.name == "Test Project")
             #expect(todo.area?.name == "Test Area")
@@ -55,7 +55,7 @@ struct TodoTests {
             #expect(todo.name == "Simple Todo")
             #expect(todo.notes == nil)
             #expect(todo.status == .open)
-            #expect(todo.dueDate == nil)
+            #expect(todo.deadlineDate == nil)
             #expect(todo.tags.isEmpty)
             #expect(todo.project == nil)
             #expect(todo.area == nil)
@@ -92,24 +92,24 @@ struct TodoTests {
 
         @Test func isOverdueWhenPastDueAndOpen() {
             let pastDate = Date().addingTimeInterval(-86400) // Yesterday
-            let todo = Todo(id: "t1", name: "Overdue", status: .open, dueDate: pastDate)
+            let todo = Todo(id: "t1", name: "Overdue", status: .open, deadlineDate: pastDate)
             #expect(todo.isOverdue)
         }
 
         @Test func isNotOverdueWhenFutureDue() {
             let futureDate = Date().addingTimeInterval(86400) // Tomorrow
-            let todo = Todo(id: "t1", name: "Not Overdue", status: .open, dueDate: futureDate)
+            let todo = Todo(id: "t1", name: "Not Overdue", status: .open, deadlineDate: futureDate)
             #expect(!todo.isOverdue)
         }
 
         @Test func isNotOverdueWhenCompleted() {
             let pastDate = Date().addingTimeInterval(-86400)
-            let todo = Todo(id: "t1", name: "Completed", status: .completed, dueDate: pastDate)
+            let todo = Todo(id: "t1", name: "Completed", status: .completed, deadlineDate: pastDate)
             #expect(!todo.isOverdue)
         }
 
         @Test func isNotOverdueWhenNoDueDate() {
-            let todo = Todo(id: "t1", name: "No Due Date", status: .open, dueDate: nil)
+            let todo = Todo(id: "t1", name: "No Due Date", status: .open, deadlineDate: nil)
             #expect(!todo.isOverdue)
         }
 
@@ -162,7 +162,7 @@ struct TodoTests {
             #expect(todo.name == "JSON Todo")
             #expect(todo.notes == "Created from JSON")
             #expect(todo.status == .open)
-            #expect(todo.dueDate != nil)
+            #expect(todo.deadlineDate != nil)
             #expect(todo.tags.count == 1)
             #expect(todo.tags.first?.name == "test")
         }

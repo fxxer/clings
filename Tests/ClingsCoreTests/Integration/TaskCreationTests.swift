@@ -105,7 +105,7 @@ struct TaskCreationTests {
         @Test func dueDateByDay() {
             let result = parser.parse("Submit report by friday")
 
-            #expect(result.dueDate != nil)
+            #expect(result.deadlineDate != nil)
         }
     }
 
@@ -140,7 +140,7 @@ struct TaskCreationTests {
             #expect(result.title.contains("Review") || result.title.contains("PROJ-1234"))
             #expect(result.tags.contains("jira"))
             #expect(result.tags.contains("review"))
-            #expect(result.dueDate != nil)
+            #expect(result.deadlineDate != nil)
             #expect(result.notes == "Check auth flow")
         }
 

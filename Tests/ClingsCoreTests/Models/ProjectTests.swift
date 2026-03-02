@@ -13,7 +13,7 @@ struct ProjectTests {
         @Test func withAllParameters() {
             let area = Area(id: "a1", name: "Work")
             let tag = Tag(name: "important")
-            let dueDate = Date().addingTimeInterval(86400 * 7)
+            let deadlineDate = Date().addingTimeInterval(86400 * 7)
             let created = Date()
 
             let project = Project(
@@ -23,7 +23,7 @@ struct ProjectTests {
                 status: .open,
                 area: area,
                 tags: [tag],
-                dueDate: dueDate,
+                deadlineDate: deadlineDate,
                 creationDate: created
             )
 
@@ -33,7 +33,7 @@ struct ProjectTests {
             #expect(project.status == .open)
             #expect(project.area?.name == "Work")
             #expect(project.tags.count == 1)
-            #expect(project.dueDate == dueDate)
+            #expect(project.deadlineDate == deadlineDate)
             #expect(project.creationDate == created)
         }
 
@@ -46,7 +46,7 @@ struct ProjectTests {
             #expect(project.status == .open)
             #expect(project.area == nil)
             #expect(project.tags.isEmpty)
-            #expect(project.dueDate == nil)
+            #expect(project.deadlineDate == nil)
             #expect(project.creationDate == nil)
         }
     }

@@ -195,7 +195,7 @@ public final class ThingsDatabase: Sendable {
                     status: statusFromInt(statusInt),
                     area: area,
                     tags: tags,
-                    dueDate: deadline,
+                    deadlineDate: deadline,
                     creationDate: creationDate
                 )
             }
@@ -313,7 +313,7 @@ public final class ThingsDatabase: Sendable {
             name: title,
             notes: notes,
             status: statusFromInt(statusInt),
-            dueDate: deadline,
+            deadlineDate: deadline,
             tags: tags,
             project: project,
             area: area,
@@ -341,7 +341,7 @@ public final class ThingsDatabase: Sendable {
             status: statusFromInt(row["status"]),
             area: area,
             tags: [],
-            dueDate: nil,
+            deadlineDate: nil,
             creationDate: nil
         )
     }

@@ -293,7 +293,7 @@ struct BulkTagCommand: AsyncParsableCommand {
             for tag in tagList where !merged.contains(tag) {
                 merged.append(tag)
             }
-            try await client.updateTodo(id: todo.id, name: nil, notes: nil, dueDate: nil, tags: merged)
+            try await client.updateTodo(id: todo.id, name: nil, notes: nil, deadlineDate: nil, tags: merged)
         }
 
         print(formatter.format(message: "Updated \(todos.count) todo(s)"))

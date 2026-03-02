@@ -8,13 +8,13 @@ import Foundation
 /// A todo item from Things 3.
 ///
 /// Represents a single task with metadata including title, notes, status,
-/// due date, tags, and organizational hierarchy (project/area).
+/// deadline, tags, and organizational hierarchy (project/area).
 public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
     public let id: String
     public var name: String
     public var notes: String?
     public var status: Status
-    public var dueDate: Date?
+    public var deadlineDate: Date?
     public var tags: [Tag]
     public var project: Project?
     public var area: Area?
@@ -29,7 +29,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         name: String,
         notes: String? = nil,
         status: Status = .open,
-        dueDate: Date? = nil,
+        deadlineDate: Date? = nil,
         tags: [Tag] = [],
         project: Project? = nil,
         area: Area? = nil,
@@ -43,7 +43,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.name = name
         self.notes = notes
         self.status = status
-        self.dueDate = dueDate
+        self.deadlineDate = deadlineDate
         self.tags = tags
         self.project = project
         self.area = area
@@ -59,7 +59,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
         case name
         case notes
         case status
-        case dueDate
+        case deadlineDate = "dueDate"
         case tags
         case project
         case area
@@ -83,7 +83,7 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
             status = try container.decodeIfPresent(Status.self, forKey: .status) ?? .open
         }
 
-        dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        deadlineDate = try container.decodeIfPresent(Date.self, forKey: .deadlineDate)
         tags = try container.decodeIfPresent([Tag].self, forKey: .tags) ?? []
         project = try container.decodeIfPresent(Project.self, forKey: .project)
         area = try container.decodeIfPresent(Area.self, forKey: .area)
@@ -101,10 +101,10 @@ public struct Todo: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var isOpen: Bool { status == .open }
     public var isRecurring: Bool { repeatingTemplate != nil }
 
-    /// Whether the task is overdue (has a due date in the past and is still open).
+    /// Whether the task is overdue (has a deadline in the past and is still open).
     public var isOverdue: Bool {
-        guard status == .open, let dueDate = dueDate else { return false }
-        return dueDate < Date()
+        guard status == .open, let deadline = deadlineDate else { return false }
+        return deadline < Date()
     }
 
     /// Human-readable summary for display.
@@ -143,8 +143,8 @@ extension Todo: Filterable {
             return .optionalString(notes)
         case "status":
             return .string(status.rawValue)
-        case "due", "duedate":
-            return .optionalDate(dueDate)
+        case "deadline", "deadlinedate", "due", "duedate":
+            return .optionalDate(deadlineDate)
         case "startdate":
             return .optionalDate(startDate)
         case "recurring":
