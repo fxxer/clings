@@ -53,3 +53,6 @@ coverage/
 *sensitive*
 *.env*
 backup/
+
+# Worktrees
+.worktrees/
