@@ -56,3 +56,6 @@ backup/
 
 # Worktrees
 .worktrees/
+
+# Braintrust sessions
+.braintrust/
