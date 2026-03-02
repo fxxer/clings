@@ -56,3 +56,9 @@ backup/
 
 # Worktrees
 .worktrees/
+
+# Braintrust sessions
+.braintrust/
+
+# Local docs and plans
+docs/

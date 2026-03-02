@@ -1,0 +1,110 @@
+name: Things 3 Release Monitor
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Monday 9am UTC
+  workflow_dispatch: # manual trigger
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for new Things 3 version
+        id: check
+        run: |
+          # Fetch the release notes page
+          RELEASE_PAGE=$(curl -sL "https://culturedcode.com/things/mac/help/releasenotes/" || echo "")
+
+          if [ -z "$RELEASE_PAGE" ]; then
+            echo "Warning: Could not fetch release notes page"
+            echo "new_version=unknown" >> "$GITHUB_OUTPUT"
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Extract the latest version number (format: "Things 3.X.Y")
+          # Use grep -oE (POSIX extended) instead of -oP (Perl, GNU-only)
+          LATEST_VERSION=$(echo "$RELEASE_PAGE" | grep -oE 'Things 3\.[0-9]+(\.[0-9]+)*' | head -1 | sed 's/Things //')
+
+          if [ -z "$LATEST_VERSION" ]; then
+            echo "Warning: Could not parse version from release notes"
+            echo "new_version=unknown" >> "$GITHUB_OUTPUT"
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Latest version found: $LATEST_VERSION"
+
+          # Compare against known version
+          KNOWN_VERSION=$(cat .things-version 2>/dev/null || echo "unknown")
+          echo "Known version: $KNOWN_VERSION"
+
+          if [ "$LATEST_VERSION" != "$KNOWN_VERSION" ]; then
+            echo "New version detected!"
+            echo "new_version=$LATEST_VERSION" >> "$GITHUB_OUTPUT"
+            echo "known_version=$KNOWN_VERSION" >> "$GITHUB_OUTPUT"
+            echo "has_update=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Version unchanged"
+            echo "has_update=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create issue for new version
+        if: steps.check.outputs.has_update == 'true'
+        uses: actions/github-script@v7
+        env:
+          NEW_VERSION: ${{ steps.check.outputs.new_version }}
+          KNOWN_VERSION: ${{ steps.check.outputs.known_version }}
+        with:
+          script: |
+            const newVersion = process.env.NEW_VERSION;
+            const knownVersion = process.env.KNOWN_VERSION;
+
+            // Check if an issue already exists for this version
+            const existingIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'things-update',
+              state: 'open'
+            });
+
+            const alreadyTracked = existingIssues.data.some(
+              issue => issue.title.includes(newVersion)
+            );
+
+            if (alreadyTracked) {
+              console.log(`Issue already exists for version ${newVersion}`);
+              return;
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Things 3 updated to ${newVersion}`,
+              labels: ['things-update'],
+              body: [
+                '## Things 3 Update Detected',
+                '',
+                `**Previous version:** ${knownVersion}`,
+                `**New version:** ${newVersion}`,
+                '**Release notes:** https://culturedcode.com/things/mac/help/releasenotes/',
+                '',
+                '## Action Items',
+                '',
+                '- [ ] Update Things 3 on a development machine',
+                '- [ ] Run schema drift tests: `swift test --filter SchemaDrift`',
+                `- [ ] If tests pass, update \`.things-version\` to \`${newVersion}\``,
+                '- [ ] If tests fail, run `scripts/update-schema-baseline.sh` after reviewing changes',
+                '- [ ] Update `TestDatabaseBuilder` schema if needed',
+                '- [ ] Verify all database queries still work correctly'
+              ].join('\n')
+            });

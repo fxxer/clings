@@ -59,10 +59,11 @@ public protocol ThingsClientProtocol: Sendable {
         area: String?
     ) async throws -> String
     func completeTodo(id: String) async throws
+    func reopenTodo(id: String) async throws
     func cancelTodo(id: String) async throws
     func deleteTodo(id: String) async throws
     func moveTodo(id: String, toProject: String) async throws
-    func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws
+    func updateTodo(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws
 
     // Search
     func search(query: String) async throws -> [Todo]
@@ -258,6 +259,14 @@ public actor ThingsClient: ThingsClientProtocol {
         }
     }
 
+    public func reopenTodo(id: String) async throws {
+        let script = JXAScripts.reopenTodo(id: id)
+        let result = try await bridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
     public func cancelTodo(id: String) async throws {
         let script = JXAScripts.cancelTodo(id: id)
         let result = try await bridge.executeJSON(script, as: MutationResult.self)
@@ -282,10 +291,9 @@ public actor ThingsClient: ThingsClientProtocol {
         }
     }
 
-    public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
-        // Handle non-tag updates via JXA (name, notes, dueDate work fine)
-        if name != nil || notes != nil || dueDate != nil {
-            let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
+    public func updateTodo(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws {
+        if name != nil || notes != nil || deadlineDate != nil {
+            let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: deadlineDate, tags: nil)
             let result = try await bridge.executeJSON(script, as: MutationResult.self)
             if !result.success {
                 throw ThingsError.operationFailed(result.error ?? "Unknown error")

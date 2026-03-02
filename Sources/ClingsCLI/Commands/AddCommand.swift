@@ -68,7 +68,7 @@ struct AddCommand: AsyncParsableCommand {
             parsed.whenDate = parseSimpleDate(when)
         }
         if let deadline = deadline {
-            parsed.dueDate = parseSimpleDate(deadline)
+            parsed.deadlineDate = parseSimpleDate(deadline)
         }
 
         // Handle parse-only mode
@@ -77,12 +77,12 @@ struct AddCommand: AsyncParsableCommand {
             return
         }
 
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         _ = try await client.createTodo(
             name: parsed.title,
             notes: parsed.notes,
             when: parsed.whenDate,
-            deadline: parsed.dueDate,
+            deadline: parsed.deadlineDate,
             tags: parsed.tags,
             project: parsed.project,
             area: parsed.area,
@@ -132,7 +132,7 @@ struct AddCommand: AsyncParsableCommand {
             if let whenDate = parsed.whenDate {
                 jsonDict["when"] = dateFormatter.string(from: whenDate)
             }
-            if let dueDate = parsed.dueDate {
+            if let dueDate = parsed.deadlineDate {
                 jsonDict["deadline"] = dateFormatter.string(from: dueDate)
             }
             if !parsed.checklistItems.isEmpty {
@@ -171,7 +171,7 @@ struct AddCommand: AsyncParsableCommand {
                 formatter.dateStyle = .medium
                 print("  When:     \(formatter.string(from: whenDate))")
             }
-            if let dueDate = parsed.dueDate {
+            if let dueDate = parsed.deadlineDate {
                 let formatter = DateFormatter()
                 formatter.dateStyle = .medium
                 print("  Deadline: \(formatter.string(from: dueDate))")

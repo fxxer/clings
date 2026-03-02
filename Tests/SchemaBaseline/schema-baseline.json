@@ -1,0 +1,100 @@
+{
+  "TMTask": {
+    "columns": [
+      { "cid": 0, "name": "uuid", "type": "TEXT", "notnull": 0, "pk": 1 },
+      { "cid": 1, "name": "leavesTombstone", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 2, "name": "creationDate", "type": "REAL", "notnull": 0, "pk": 0 },
+      { "cid": 3, "name": "userModificationDate", "type": "REAL", "notnull": 0, "pk": 0 },
+      { "cid": 4, "name": "type", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 5, "name": "status", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 6, "name": "stopDate", "type": "REAL", "notnull": 0, "pk": 0 },
+      { "cid": 7, "name": "trashed", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 8, "name": "title", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 9, "name": "notes", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 10, "name": "notesSync", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 11, "name": "cachedTags", "type": "BLOB", "notnull": 0, "pk": 0 },
+      { "cid": 12, "name": "start", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 13, "name": "startDate", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 14, "name": "startBucket", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 15, "name": "reminderTime", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 16, "name": "lastReminderInteractionDate", "type": "REAL", "notnull": 0, "pk": 0 },
+      { "cid": 17, "name": "deadline", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 18, "name": "deadlineSuppressionDate", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 19, "name": "t2_deadlineOffset", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 20, "name": "index", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 21, "name": "todayIndex", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 22, "name": "todayIndexReferenceDate", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 23, "name": "area", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 24, "name": "project", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 25, "name": "heading", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 26, "name": "contact", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 27, "name": "untrashedLeafActionsCount", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 28, "name": "openUntrashedLeafActionsCount", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 29, "name": "checklistItemsCount", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 30, "name": "openChecklistItemsCount", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 31, "name": "rt1_repeatingTemplate", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 32, "name": "rt1_recurrenceRule", "type": "BLOB", "notnull": 0, "pk": 0 },
+      { "cid": 33, "name": "rt1_instanceCreationStartDate", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 34, "name": "rt1_instanceCreationPaused", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 35, "name": "rt1_instanceCreationCount", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 36, "name": "rt1_afterCompletionReferenceDate", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 37, "name": "rt1_nextInstanceStartDate", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 38, "name": "experimental", "type": "BLOB", "notnull": 0, "pk": 0 },
+      { "cid": 39, "name": "repeater", "type": "BLOB", "notnull": 0, "pk": 0 },
+      { "cid": 40, "name": "repeaterMigrationDate", "type": "REAL", "notnull": 0, "pk": 0 }
+    ],
+    "column_count": 41
+  },
+  "TMArea": {
+    "columns": [
+      { "cid": 0, "name": "uuid", "type": "TEXT", "notnull": 0, "pk": 1 },
+      { "cid": 1, "name": "title", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 2, "name": "visible", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 3, "name": "index", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 4, "name": "cachedTags", "type": "BLOB", "notnull": 0, "pk": 0 },
+      { "cid": 5, "name": "experimental", "type": "BLOB", "notnull": 0, "pk": 0 }
+    ],
+    "column_count": 6
+  },
+  "TMTag": {
+    "columns": [
+      { "cid": 0, "name": "uuid", "type": "TEXT", "notnull": 0, "pk": 1 },
+      { "cid": 1, "name": "title", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 2, "name": "shortcut", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 3, "name": "usedDate", "type": "REAL", "notnull": 0, "pk": 0 },
+      { "cid": 4, "name": "parent", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 5, "name": "index", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 6, "name": "experimental", "type": "BLOB", "notnull": 0, "pk": 0 }
+    ],
+    "column_count": 7
+  },
+  "TMTaskTag": {
+    "columns": [
+      { "cid": 0, "name": "tasks", "type": "TEXT", "notnull": 1, "pk": 0 },
+      { "cid": 1, "name": "tags", "type": "TEXT", "notnull": 1, "pk": 0 }
+    ],
+    "column_count": 2
+  },
+  "TMAreaTag": {
+    "columns": [
+      { "cid": 0, "name": "areas", "type": "TEXT", "notnull": 1, "pk": 0 },
+      { "cid": 1, "name": "tags", "type": "TEXT", "notnull": 1, "pk": 0 }
+    ],
+    "column_count": 2
+  },
+  "TMChecklistItem": {
+    "columns": [
+      { "cid": 0, "name": "uuid", "type": "TEXT", "notnull": 0, "pk": 1 },
+      { "cid": 1, "name": "userModificationDate", "type": "REAL", "notnull": 0, "pk": 0 },
+      { "cid": 2, "name": "creationDate", "type": "REAL", "notnull": 0, "pk": 0 },
+      { "cid": 3, "name": "title", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 4, "name": "status", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 5, "name": "stopDate", "type": "REAL", "notnull": 0, "pk": 0 },
+      { "cid": 6, "name": "index", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 7, "name": "task", "type": "TEXT", "notnull": 0, "pk": 0 },
+      { "cid": 8, "name": "leavesTombstone", "type": "INTEGER", "notnull": 0, "pk": 0 },
+      { "cid": 9, "name": "experimental", "type": "BLOB", "notnull": 0, "pk": 0 }
+    ],
+    "column_count": 10
+  }
+}

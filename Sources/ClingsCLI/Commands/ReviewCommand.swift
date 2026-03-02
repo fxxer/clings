@@ -100,8 +100,8 @@ struct ReviewStartCommand: AsyncParsableCommand {
 
         let nextWeek = Calendar.current.date(byAdding: .day, value: 7, to: Date())!
         let upcomingDeadlines = allOpen.filter { todo in
-            guard let due = todo.dueDate else { return false }
-            return due <= nextWeek
+            guard let deadline = todo.deadlineDate else { return false }
+            return deadline <= nextWeek
         }
 
         if upcomingDeadlines.isEmpty {
@@ -109,7 +109,7 @@ struct ReviewStartCommand: AsyncParsableCommand {
         } else {
             print("  \(cyan)\(upcomingDeadlines.count) deadlines in the next 7 days:\(reset)")
             for todo in upcomingDeadlines.prefix(5) {
-                let dueStr = todo.dueDate.map { formatDate($0) } ?? ""
+                let dueStr = todo.deadlineDate.map { formatDate($0) } ?? ""
                 print("    • \(todo.name) \(dim)(\(dueStr))\(reset)")
             }
             if upcomingDeadlines.count > 5 {

@@ -45,7 +45,7 @@ struct CompleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
 
         let formatter: OutputFormatter = output.json
             ? JSONOutputFormatter()
@@ -88,6 +88,43 @@ struct CompleteCommand: AsyncParsableCommand {
     }
 }
 
+// MARK: - Reopen Command
+
+struct ReopenCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "reopen",
+        abstract: "Reopen a completed or canceled todo",
+        discussion: """
+        Reopens a todo by its ID, setting its status back to open.
+        Use this to restore a todo that was completed or canceled
+        by mistake.
+
+        EXAMPLES:
+          clings reopen ABC123          Reopen by ID
+          clings reopen ABC123 --json   Output result as JSON
+
+        SEE ALSO:
+          complete, cancel
+        """
+    )
+
+    @Argument(help: "The ID of the todo to reopen")
+    var id: String
+
+    @OptionGroup var output: OutputOptions
+
+    func run() async throws {
+        let client = try ThingsClientFactory.create()
+        try await client.reopenTodo(id: id)
+
+        let formatter: OutputFormatter = output.json
+            ? JSONOutputFormatter()
+            : TextOutputFormatter(useColors: !output.noColor)
+
+        print(formatter.format(message: "Reopened todo: \(id)"))
+    }
+}
+
 // MARK: - Cancel Command
 
 struct CancelCommand: AsyncParsableCommand {
@@ -116,7 +153,7 @@ struct CancelCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         try await client.cancelTodo(id: id)
 
         let formatter: OutputFormatter = output.json
@@ -159,7 +196,7 @@ struct DeleteCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         try await client.deleteTodo(id: id)
 
         let formatter: OutputFormatter = output.json
@@ -183,7 +220,7 @@ struct UpdateCommand: AsyncParsableCommand {
         Examples:
           clings update ABC123 --name "New title"
           clings update ABC123 --notes "Updated notes"
-          clings update ABC123 --due 2024-12-25
+          clings update ABC123 --deadline 2024-12-25
           clings update ABC123 --when tomorrow
           clings update ABC123 --heading "Waiting on them"
           clings update ABC123 --tags work,urgent
@@ -199,8 +236,8 @@ struct UpdateCommand: AsyncParsableCommand {
     @Option(name: .long, help: "New notes for the todo")
     var notes: String?
 
-    @Option(name: .long, help: "New due date (YYYY-MM-DD or 'today', 'tomorrow')")
-    var due: String?
+    @Option(name: .long, help: "New deadline date (YYYY-MM-DD or 'today', 'tomorrow')")
+    var deadline: String?
 
     @Option(name: .long, help: "Schedule for a date ('today', 'tomorrow', 'evening', 'anytime', 'someday', or YYYY-MM-DD). Requires auth token.")
     var when: String?
@@ -215,8 +252,8 @@ struct UpdateCommand: AsyncParsableCommand {
 
     func run() async throws {
         // Check if any update options provided
-        guard name != nil || notes != nil || due != nil || when != nil || heading != nil || !tags.isEmpty else {
-            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --due, --when, --heading, or --tags.")
+        guard name != nil || notes != nil || deadline != nil || when != nil || heading != nil || !tags.isEmpty else {
+            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --deadline, --when, --heading, or --tags.")
         }
 
         // Validate --when value if provided
@@ -265,25 +302,25 @@ struct UpdateCommand: AsyncParsableCommand {
             }
         }
 
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
 
-        // Parse due date if provided
-        var dueDate: Date? = nil
-        if let dueStr = due {
-            dueDate = parseDate(dueStr)
-            if dueDate == nil {
-                throw ThingsError.invalidState("Invalid date format: \(dueStr). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
+        // Parse deadline date if provided
+        var deadlineDate: Date? = nil
+        if let deadlineStr = deadline {
+            deadlineDate = parseDate(deadlineStr)
+            if deadlineDate == nil {
+                throw ThingsError.invalidState("Invalid date format: \(deadlineStr). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
             }
         }
 
-        // Update via JXA (name, notes, dueDate, tags)
-        let hasJXAUpdates = name != nil || notes != nil || dueDate != nil || !tags.isEmpty
+        // Update via JXA (name, notes, deadline, tags)
+        let hasJXAUpdates = name != nil || notes != nil || deadlineDate != nil || !tags.isEmpty
         if hasJXAUpdates {
             try await client.updateTodo(
                 id: id,
                 name: name,
                 notes: notes,
-                dueDate: dueDate,
+                deadlineDate: deadlineDate,
                 tags: tags.isEmpty ? nil : tags
             )
         }
@@ -295,7 +332,7 @@ struct UpdateCommand: AsyncParsableCommand {
             } catch {
                 if hasJXAUpdates {
                     let jxaFields = [name != nil ? "name" : nil, notes != nil ? "notes" : nil,
-                                   dueDate != nil ? "due date" : nil, !tags.isEmpty ? "tags" : nil]
+                                   deadlineDate != nil ? "deadline" : nil, !tags.isEmpty ? "tags" : nil]
                         .compactMap { $0 }.joined(separator: ", ")
                     throw ThingsError.operationFailed(
                         "Partial update: \(jxaFields) updated, but --when/--heading failed: \(error.localizedDescription)"

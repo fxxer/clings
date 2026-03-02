@@ -33,7 +33,7 @@ enum TestData {
         status: .open,
         area: workArea,
         tags: [workTag],
-        dueDate: Date().addingTimeInterval(86400 * 7),
+        deadlineDate: Date().addingTimeInterval(86400 * 7),
         creationDate: Date().addingTimeInterval(-86400 * 30)
     )
 
@@ -44,7 +44,7 @@ enum TestData {
         status: .completed,
         area: nil,
         tags: [],
-        dueDate: nil,
+        deadlineDate: nil,
         creationDate: Date().addingTimeInterval(-86400 * 60)
     )
 
@@ -55,7 +55,7 @@ enum TestData {
         status: .canceled,
         area: personalArea,
         tags: [],
-        dueDate: nil,
+        deadlineDate: nil,
         creationDate: Date().addingTimeInterval(-86400 * 90)
     )
 
@@ -75,7 +75,7 @@ enum TestData {
         name: "Open task",
         notes: "This is an open task",
         status: .open,
-        dueDate: Date().addingTimeInterval(86400),
+        deadlineDate: Date().addingTimeInterval(86400),
         tags: [workTag],
         project: projectAlpha,
         area: workArea,
@@ -89,7 +89,7 @@ enum TestData {
         name: "Completed task",
         notes: nil,
         status: .completed,
-        dueDate: nil,
+        deadlineDate: nil,
         tags: [],
         project: nil,
         area: nil,
@@ -103,7 +103,7 @@ enum TestData {
         name: "Canceled task",
         notes: "Was not needed",
         status: .canceled,
-        dueDate: nil,
+        deadlineDate: nil,
         tags: [urgentTag],
         project: nil,
         area: nil,
@@ -117,7 +117,7 @@ enum TestData {
         name: "Overdue task",
         notes: "This should have been done",
         status: .open,
-        dueDate: Date().addingTimeInterval(-86400), // Yesterday
+        deadlineDate: Date().addingTimeInterval(-86400), // Yesterday
         tags: [urgentTag, workTag],
         project: projectAlpha,
         area: workArea,
@@ -131,7 +131,7 @@ enum TestData {
         name: "Task without project",
         notes: nil,
         status: .open,
-        dueDate: nil,
+        deadlineDate: nil,
         tags: [homeTag],
         project: nil,
         area: personalArea,
@@ -145,7 +145,7 @@ enum TestData {
         name: "Task with checklist",
         notes: "Has multiple steps",
         status: .open,
-        dueDate: Date().addingTimeInterval(86400 * 3),
+        deadlineDate: Date().addingTimeInterval(86400 * 3),
         tags: [],
         project: nil,
         area: nil,

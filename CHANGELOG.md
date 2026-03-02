@@ -5,6 +5,31 @@ All notable changes to clings will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-02
+
+### Added
+
+- **Reopen command**: Reopen completed or canceled todos with `clings reopen <ID>`. Includes status validation and confirmation of state change.
+- **Test database infrastructure**: Self-contained SQLite test databases via `TestDatabaseBuilder` enable testing all database queries without a live Things 3 installation. 36 new database tests cover list membership, date decoding, search, checklist items, and trashed item exclusion.
+- **Schema drift detection**: `SchemaDriftTests` compare the live Things 3 database schema against a checked-in baseline (`schema-baseline.json`). Automatically skipped in CI where Things 3 is unavailable.
+- **GitHub Actions CI**: Automated build and test on every push to main/dev and PRs to main. Runs `swift build`, `swift test`, and `swift build -c release` on macOS 15.
+- **Things 3 release monitor**: Weekly GitHub Actions workflow checks culturedcode.com for new Things 3 versions and creates an issue with action items when an update is detected.
+- **Todo model fields**: `startDate`, `isRecurring`, and project `area` inheritance are now exposed in the Todo model and available in filter queries.
+
+### Fixed
+
+- **Things 3 date decoding**: Packed dates (used for `startDate` and `deadlineDate`) now decode correctly using the Things 3 bit-packing format instead of treating raw integers as Unix timestamps.
+- **Date comparison in queries**: Filter comparisons like `due < today` now work correctly against packed date values.
+- **Single-todo JSON output**: `clings show <ID> --json` now uses the same `TodoJSON` format as list commands for consistent output.
+- **Recurring filter**: `clings filter "recurring = true"` now correctly uses boolean comparison instead of string comparison.
+- **JXA test suite**: Fixed 14 pre-existing test failures where `createTodo` tests expected JXA format but the implementation uses AppleScript.
+
+### Changed
+
+- **`dueDate` renamed to `deadlineDate`** in JSON output to match Things 3's internal terminology. This is a **breaking change** for scripts consuming `--json` output.
+- **`ThingsDatabase` accepts explicit path**: `ThingsDatabase(databasePath:)` and `CLINGS_DB_PATH` environment variable allow pointing at any SQLite file, enabling testing and custom setups.
+- **Documentation updates**: CLAUDE.md module structure, README.md filter fields, and command reference updated to match current codebase.
+
 ## [0.2.10] - 2025-12-29
 
 ### Fixed

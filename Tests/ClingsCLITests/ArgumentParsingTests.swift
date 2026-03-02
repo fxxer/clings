@@ -95,6 +95,25 @@ struct ArgumentParsingTests {
         }
     }
 
+    @Suite("Reopen Command")
+    struct ReopenCommandParsing {
+        @Test func requiresId() {
+            #expect(throws: Error.self) {
+                try ReopenCommand.parse([])
+            }
+        }
+
+        @Test func acceptsId() throws {
+            let command = try ReopenCommand.parse(["REOPEN123"])
+            #expect(command.id == "REOPEN123")
+        }
+
+        @Test func jsonOutput() throws {
+            let command = try ReopenCommand.parse(["REOPEN123", "--json"])
+            #expect(command.output.json)
+        }
+    }
+
     @Suite("Delete Command")
     struct DeleteCommandParsing {
         @Test func requiresId() {
@@ -142,9 +161,9 @@ struct ArgumentParsingTests {
             #expect(command.notes == "Some notes")
         }
 
-        @Test func dueOption() throws {
-            let command = try UpdateCommand.parse(["JKL012", "--due", "2024-12-25"])
-            #expect(command.due == "2024-12-25")
+        @Test func deadlineOption() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--deadline", "2024-12-25"])
+            #expect(command.deadline == "2024-12-25")
         }
 
         @Test func tagsOption() throws {
@@ -157,12 +176,12 @@ struct ArgumentParsingTests {
                 "JKL012",
                 "--name", "New Title",
                 "--notes", "Notes",
-                "--due", "today",
+                "--deadline", "today",
                 "--tags", "tag1", "tag2",
             ])
             #expect(command.name == "New Title")
             #expect(command.notes == "Notes")
-            #expect(command.due == "today")
+            #expect(command.deadline == "today")
             #expect(command.tags == ["tag1", "tag2"])
         }
 

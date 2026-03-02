@@ -35,7 +35,10 @@ let package = Package(
         ),
         .testTarget(
             name: "ClingsCoreTests",
-            dependencies: ["ClingsCore"]
+            dependencies: [
+                "ClingsCore",
+                .product(name: "GRDB", package: "GRDB.swift")
+            ]
         ),
         .testTarget(
             name: "ClingsCLITests",

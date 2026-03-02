@@ -68,7 +68,7 @@ public struct JSONOutputFormatter: OutputFormatter {
     }
 
     public func format(todo: Todo) -> String {
-        encode(todo)
+        encode(TodoJSON(from: todo))
     }
 
     public func format(message: String) -> String {
@@ -156,10 +156,18 @@ public struct TextOutputFormatter: OutputFormatter {
 
         // Status and dates
         var metaLine = "Status: \(statusColor(todo.status))"
-        if let dueDate = todo.dueDate {
+        if let deadline = todo.deadlineDate {
             let formatter = DateFormatter()
             formatter.dateStyle = .medium
-            metaLine += "  Due: \(formatter.string(from: dueDate))"
+            metaLine += "  Deadline: \(formatter.string(from: deadline))"
+        }
+        if let startDate = todo.startDate {
+            let formatter = DateFormatter()
+            formatter.dateStyle = .medium
+            metaLine += "  When: \(formatter.string(from: startDate))"
+        }
+        if todo.isRecurring {
+            metaLine += "  " + dim("↻ Recurring")
         }
         lines.append(metaLine)
 
@@ -234,11 +242,11 @@ public struct TextOutputFormatter: OutputFormatter {
         }
         parts.append(name)
 
-        // Due date indicator
-        if let dueDate = todo.dueDate {
+        // Deadline indicator
+        if let deadline = todo.deadlineDate {
             let formatter = DateFormatter()
             formatter.dateFormat = "MMM d"
-            let dateStr = formatter.string(from: dueDate)
+            let dateStr = formatter.string(from: deadline)
             if todo.isOverdue {
                 parts.append(red("(\(dateStr))"))
             } else {
@@ -305,7 +313,9 @@ struct TodoJSON: Encodable {
     let name: String
     let notes: String
     let status: String
-    let dueDate: String?
+    let deadlineDate: String?
+    let startDate: String?
+    let isRecurring: Bool
     let tags: [String]
     let project: String?
     let area: String?
@@ -314,7 +324,7 @@ struct TodoJSON: Encodable {
     let modificationDate: String
 
     enum CodingKeys: String, CodingKey {
-        case id, name, notes, status, dueDate, tags, project, area
+        case id, name, notes, status, deadlineDate, startDate, isRecurring, tags, project, area
         case checklistItems, creationDate, modificationDate
     }
 
@@ -325,7 +335,9 @@ struct TodoJSON: Encodable {
         self.name = todo.name
         self.notes = todo.notes ?? ""
         self.status = todo.status.rawValue
-        self.dueDate = todo.dueDate.map { formatter.string(from: $0) }
+        self.deadlineDate = todo.deadlineDate.map { formatter.string(from: $0) }
+        self.startDate = todo.startDate.map { formatter.string(from: $0) }
+        self.isRecurring = todo.isRecurring
         self.tags = todo.tags.map { $0.name }
         self.project = todo.project?.name
         self.area = todo.area?.name
@@ -339,12 +351,14 @@ struct TodoJSON: Encodable {
         try container.encode(area, forKey: .area)
         try container.encode(checklistItems, forKey: .checklistItems)
         try container.encode(creationDate, forKey: .creationDate)
-        try container.encode(dueDate, forKey: .dueDate)
+        try container.encode(deadlineDate, forKey: .deadlineDate)
         try container.encode(id, forKey: .id)
+        try container.encode(isRecurring, forKey: .isRecurring)
         try container.encode(modificationDate, forKey: .modificationDate)
         try container.encode(name, forKey: .name)
         try container.encode(notes, forKey: .notes)
         try container.encode(project, forKey: .project)
+        try container.encode(startDate, forKey: .startDate)
         try container.encode(status, forKey: .status)
         try container.encode(tags, forKey: .tags)
     }
@@ -379,7 +393,7 @@ struct ProjectJSON: Encodable {
     let status: String
     let area: String?
     let tags: [String]
-    let dueDate: String?
+    let deadlineDate: String?
     let creationDate: String?
 
     init(from project: Project) {
@@ -391,7 +405,7 @@ struct ProjectJSON: Encodable {
         self.status = project.status.rawValue
         self.area = project.area?.name
         self.tags = project.tags.map { $0.name }
-        self.dueDate = project.dueDate.map { formatter.string(from: $0) }
+        self.deadlineDate = project.deadlineDate.map { formatter.string(from: $0) }
         self.creationDate = project.creationDate.map { formatter.string(from: $0) }
     }
 }

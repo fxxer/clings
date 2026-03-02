@@ -12,7 +12,7 @@ public struct ParsedTask: Sendable {
     public var tags: [String]
     public var project: String?
     public var area: String?
-    public var dueDate: Date?
+    public var deadlineDate: Date?
     public var whenDate: Date?
     public var checklistItems: [String]
     public var priority: Priority?
@@ -23,7 +23,7 @@ public struct ParsedTask: Sendable {
         tags: [String] = [],
         project: String? = nil,
         area: String? = nil,
-        dueDate: Date? = nil,
+        deadlineDate: Date? = nil,
         whenDate: Date? = nil,
         checklistItems: [String] = [],
         priority: Priority? = nil
@@ -33,7 +33,7 @@ public struct ParsedTask: Sendable {
         self.tags = tags
         self.project = project
         self.area = area
-        self.dueDate = dueDate
+        self.deadlineDate = deadlineDate
         self.whenDate = whenDate
         self.checklistItems = checklistItems
         self.priority = priority
@@ -50,7 +50,7 @@ public struct TaskParser: Sendable {
         var tags: [String] = []
         var project: String?
         var area: String?
-        var dueDate: Date?
+        var deadlineDate: Date?
         var whenDate: Date?
         var checklistItems: [String] = []
         var notes: String?
@@ -138,7 +138,7 @@ public struct TaskParser: Sendable {
            let dateRange = Range(match.range(at: 1), in: remaining),
            let fullRange = Range(match.range, in: remaining) {
             let dateStr = String(remaining[dateRange])
-            dueDate = parseDate(dateStr)
+            deadlineDate = parseDate(dateStr)
             remaining.removeSubrange(fullRange)
         }
 
@@ -172,7 +172,7 @@ public struct TaskParser: Sendable {
             tags: tags,
             project: project,
             area: area,
-            dueDate: dueDate,
+            deadlineDate: deadlineDate,
             whenDate: whenDate,
             checklistItems: checklistItems,
             priority: priority
