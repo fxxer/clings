@@ -43,6 +43,9 @@ struct TodoTests {
             #expect(todo.project?.name == "Test Project")
             #expect(todo.area?.name == "Test Area")
             #expect(todo.checklistItems.count == 1)
+            #expect(todo.startDate == nil)
+            #expect(todo.repeatingTemplate == nil)
+            #expect(!todo.isRecurring)
         }
 
         @Test func withDefaults() {
@@ -57,6 +60,8 @@ struct TodoTests {
             #expect(todo.project == nil)
             #expect(todo.area == nil)
             #expect(todo.checklistItems.isEmpty)
+            #expect(todo.startDate == nil)
+            #expect(todo.repeatingTemplate == nil)
         }
     }
 
@@ -106,6 +111,16 @@ struct TodoTests {
         @Test func isNotOverdueWhenNoDueDate() {
             let todo = Todo(id: "t1", name: "No Due Date", status: .open, dueDate: nil)
             #expect(!todo.isOverdue)
+        }
+
+        @Test func isRecurringWhenRepeatingTemplatePresent() {
+            let todo = Todo(id: "t1", name: "Recurring", repeatingTemplate: "some-template-uuid")
+            #expect(todo.isRecurring)
+        }
+
+        @Test func isNotRecurringWhenRepeatingTemplateNil() {
+            let todo = Todo(id: "t1", name: "Not Recurring")
+            #expect(!todo.isRecurring)
         }
 
         @Test func summaryWithProjectAndTags() {
@@ -313,6 +328,35 @@ struct TodoTests {
                 // Success
             } else {
                 Issue.record("Expected date value for created")
+            }
+        }
+
+        @Test func fieldValueStartDate() {
+            let date = Date()
+            let todo = Todo(id: "t1", name: "Scheduled", startDate: date)
+            let value = todo.fieldValue("startdate")
+
+            if case .optionalDate(let d) = value {
+                #expect(d == date)
+            } else {
+                Issue.record("Expected optionalDate value for startdate")
+            }
+        }
+
+        @Test func fieldValueRecurring() {
+            let recurring = Todo(id: "t1", name: "R", repeatingTemplate: "tmpl-uuid")
+            let nonRecurring = Todo(id: "t2", name: "NR")
+
+            if case .bool(let val) = recurring.fieldValue("recurring") {
+                #expect(val == true)
+            } else {
+                Issue.record("Expected bool value for recurring")
+            }
+
+            if case .bool(let val) = nonRecurring.fieldValue("recurring") {
+                #expect(val == false)
+            } else {
+                Issue.record("Expected bool value for recurring")
             }
         }
 
