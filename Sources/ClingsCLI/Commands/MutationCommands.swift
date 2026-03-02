@@ -220,7 +220,7 @@ struct UpdateCommand: AsyncParsableCommand {
         Examples:
           clings update ABC123 --name "New title"
           clings update ABC123 --notes "Updated notes"
-          clings update ABC123 --due 2024-12-25
+          clings update ABC123 --deadline 2024-12-25
           clings update ABC123 --when tomorrow
           clings update ABC123 --heading "Waiting on them"
           clings update ABC123 --tags work,urgent
@@ -236,8 +236,8 @@ struct UpdateCommand: AsyncParsableCommand {
     @Option(name: .long, help: "New notes for the todo")
     var notes: String?
 
-    @Option(name: .long, help: "New due date (YYYY-MM-DD or 'today', 'tomorrow')")
-    var due: String?
+    @Option(name: .long, help: "New deadline date (YYYY-MM-DD or 'today', 'tomorrow')")
+    var deadline: String?
 
     @Option(name: .long, help: "Schedule for a date ('today', 'tomorrow', 'evening', 'anytime', 'someday', or YYYY-MM-DD). Requires auth token.")
     var when: String?
@@ -252,8 +252,8 @@ struct UpdateCommand: AsyncParsableCommand {
 
     func run() async throws {
         // Check if any update options provided
-        guard name != nil || notes != nil || due != nil || when != nil || heading != nil || !tags.isEmpty else {
-            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --due, --when, --heading, or --tags.")
+        guard name != nil || notes != nil || deadline != nil || when != nil || heading != nil || !tags.isEmpty else {
+            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --deadline, --when, --heading, or --tags.")
         }
 
         // Validate --when value if provided
@@ -306,10 +306,10 @@ struct UpdateCommand: AsyncParsableCommand {
 
         // Parse deadline date if provided
         var deadlineDate: Date? = nil
-        if let dueStr = due {
-            deadlineDate = parseDate(dueStr)
+        if let deadlineStr = deadline {
+            deadlineDate = parseDate(deadlineStr)
             if deadlineDate == nil {
-                throw ThingsError.invalidState("Invalid date format: \(dueStr). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
+                throw ThingsError.invalidState("Invalid date format: \(deadlineStr). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
             }
         }
 
