@@ -284,48 +284,48 @@ struct JXAScriptsTests {
         // URL scheme tests would require integration testing with Things 3.
     }
 
-    @Suite("Create Todo Script")
+    @Suite("Create Todo Script (AppleScript)")
     struct CreateTodoScript {
         @Test func withName() {
             let script = JXAScripts.createTodo(name: "New Task")
-            #expect(script.contains("name: 'New Task'"))
-            #expect(script.contains("app.make({ new: 'to do'"))
+            #expect(script.contains("tell application \"Things3\""))
+            #expect(script.contains("make new to do with properties"))
+            #expect(script.contains("name: \"New Task\""))
         }
 
         @Test func withNotes() {
             let script = JXAScripts.createTodo(name: "Task", notes: "Some notes")
-            #expect(script.contains("notes: 'Some notes'"))
+            #expect(script.contains("notes: \"Some notes\""))
         }
 
         @Test func withTags() {
             let script = JXAScripts.createTodo(name: "Task", tags: ["tag1", "tag2"])
-            // Tags are applied via AppleScript after creation, not in the JXA script.
-            #expect(!script.contains("'tag1'"))
-            #expect(!script.contains("'tag2'"))
+            // Tags are applied separately via AppleScript, not in the create script.
+            #expect(!script.contains("tag1"))
+            #expect(!script.contains("tag2"))
         }
 
         @Test func withProject() {
             let script = JXAScripts.createTodo(name: "Task", project: "My Project")
-            #expect(script.contains("app.projects.byName('My Project')"))
-            #expect(script.contains("todo.project = project"))
+            #expect(script.contains("exists project \"My Project\""))
+            #expect(script.contains("set project of newTodo"))
         }
 
         @Test func withArea() {
             let script = JXAScripts.createTodo(name: "Task", area: "Work Area")
-            #expect(script.contains("app.areas.byName('Work Area')"))
-            #expect(script.contains("todo.area = area"))
+            #expect(script.contains("exists area \"Work Area\""))
+            #expect(script.contains("set area of newTodo"))
         }
 
         @Test func withChecklistItems() {
             let script = JXAScripts.createTodo(name: "Task", checklistItems: ["Step 1", "Step 2"])
-            #expect(script.contains("'Step 1'"))
-            #expect(script.contains("'Step 2'"))
+            #expect(script.contains("\"Step 1\""))
+            #expect(script.contains("\"Step 2\""))
         }
 
-        @Test func returnsIdAndName() {
+        @Test func returnsId() {
             let script = JXAScripts.createTodo(name: "Task")
-            #expect(script.contains("id: todo.id()"))
-            #expect(script.contains("name: todo.name()"))
+            #expect(script.contains("return id of newTodo"))
         }
     }
 
@@ -355,50 +355,39 @@ struct JXAScriptsTests {
 
     @Suite("Script Validity")
     struct ScriptValidity {
-        @Test func allScriptsAreIIFE() {
-            // All scripts should be Immediately Invoked Function Expressions
-            let scripts = [
-                JXAScripts.fetchList("Today"),
-                JXAScripts.fetchTodo(id: "test"),
-                JXAScripts.fetchProjects(),
-                JXAScripts.fetchAreas(),
-                JXAScripts.fetchTags(),
-                JXAScripts.completeTodo(id: "test"),
-                JXAScripts.cancelTodo(id: "test"),
-                JXAScripts.reopenTodo(id: "test"),
-                JXAScripts.deleteTodo(id: "test"),
-                JXAScripts.moveTodo(id: "test", toProject: "Project"),
-                JXAScripts.updateTodo(id: "test", name: "Name"),
-                JXAScripts.createTodo(name: "Task"),
-                JXAScripts.search(query: "test"),
-            ]
+        // JXA scripts (IIFE format with Application('Things3'))
+        static let jxaScripts = [
+            JXAScripts.fetchList("Today"),
+            JXAScripts.fetchTodo(id: "test"),
+            JXAScripts.fetchProjects(),
+            JXAScripts.fetchAreas(),
+            JXAScripts.fetchTags(),
+            JXAScripts.completeTodo(id: "test"),
+            JXAScripts.cancelTodo(id: "test"),
+            JXAScripts.reopenTodo(id: "test"),
+            JXAScripts.deleteTodo(id: "test"),
+            JXAScripts.moveTodo(id: "test", toProject: "Project"),
+            JXAScripts.updateTodo(id: "test", name: "Name"),
+            JXAScripts.search(query: "test"),
+        ]
 
-            for script in scripts {
+        @Test func allJXAScriptsAreIIFE() {
+            for script in Self.jxaScripts {
                 #expect(script.hasPrefix("(() => {"), "Script should start with IIFE")
                 #expect(script.hasSuffix("})()"), "Script should end with IIFE invocation")
             }
         }
 
-        @Test func allScriptsUseThings3App() {
-            let scripts = [
-                JXAScripts.fetchList("Today"),
-                JXAScripts.fetchTodo(id: "test"),
-                JXAScripts.fetchProjects(),
-                JXAScripts.fetchAreas(),
-                JXAScripts.fetchTags(),
-                JXAScripts.completeTodo(id: "test"),
-                JXAScripts.cancelTodo(id: "test"),
-                JXAScripts.reopenTodo(id: "test"),
-                JXAScripts.deleteTodo(id: "test"),
-                JXAScripts.moveTodo(id: "test", toProject: "Project"),
-                JXAScripts.updateTodo(id: "test", name: "Name"),
-                JXAScripts.createTodo(name: "Task"),
-                JXAScripts.search(query: "test"),
-            ]
-
-            for script in scripts {
+        @Test func allJXAScriptsUseThings3App() {
+            for script in Self.jxaScripts {
                 #expect(script.contains("Application('Things3')"))
             }
+        }
+
+        @Test func createTodoIsAppleScript() {
+            let script = JXAScripts.createTodo(name: "Task")
+            #expect(script.contains("tell application \"Things3\""))
+            #expect(script.contains("end tell"))
         }
     }
 }
