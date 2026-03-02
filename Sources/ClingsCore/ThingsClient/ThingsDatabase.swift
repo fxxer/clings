@@ -241,7 +241,8 @@ public final class ThingsDatabase: Sendable {
         return try db.read { db in
             let sql = """
                 SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                       userModificationDate, project, area
+                       userModificationDate, project, area, startDate,
+                       rt1_repeatingTemplate
                 FROM TMTask
                 WHERE uuid = ? AND type = 0
                 """
@@ -261,7 +262,8 @@ public final class ThingsDatabase: Sendable {
         return try db.read { db in
             let sql = """
                 SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
-                       userModificationDate, project, area
+                       userModificationDate, project, area, startDate,
+                       rt1_repeatingTemplate
                 FROM TMTask
                 WHERE type = 0 AND trashed = 0
                       AND (title LIKE ? OR notes LIKE ?)
@@ -331,7 +333,6 @@ public final class ThingsDatabase: Sendable {
 
         let areaUuid: String? = row["area"]
         let area: Area? = try areaUuid.flatMap { try self.fetchArea(uuid: $0, db: db) }
-        let tags = try self.fetchTagsForTask(uuid: uuid, db: db)
 
         return Project(
             id: uuid,
@@ -339,7 +340,7 @@ public final class ThingsDatabase: Sendable {
             notes: nil,
             status: statusFromInt(row["status"]),
             area: area,
-            tags: tags,
+            tags: [],
             dueDate: nil,
             creationDate: nil
         )
