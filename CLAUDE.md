@@ -46,23 +46,21 @@ This approach provides:
 
 ```
 Sources/
-├── clings/
-│   └── main.swift           # Entry point
+├── ClingsCLI/
+│   └── Commands/              # Command implementations (AddCommand, ListCommands, etc.)
 ├── ClingsCore/
-│   ├── CLI/
-│   │   ├── Commands/        # Command implementations
-│   │   └── CLIApp.swift     # ArgumentParser setup
-│   ├── Database/
-│   │   └── ThingsDatabase.swift  # SQLite access
-│   ├── JXA/
-│   │   └── ThingsJXA.swift  # JXA script execution
-│   ├── Models/
-│   │   └── Todo.swift       # Data types
-│   ├── NLP/
-│   │   └── TaskParser.swift # Natural language parsing
-│   └── Output/
-│       ├── PrettyPrinter.swift
-│       └── JSONOutput.swift
+│   ├── Config/                # Auth token storage
+│   ├── Filter/                # Filter DSL parser and expression evaluator
+│   ├── Models/                # Todo, Project, Area, Tag, ChecklistItem, Status
+│   ├── NLP/                   # Natural language task parsing
+│   ├── Output/                # OutputFormatter (pretty + JSON)
+│   ├── ThingsClient/          # ThingsDatabase (SQLite), JXAScripts, HybridThingsClient
+│   └── Utils/                 # ThingsDateConverter, SchemaIntrospector
+Tests/
+├── ClingsCoreTests/
+│   ├── Database/              # ThingsDatabaseTests, SchemaDriftTests, TestDatabaseBuilder
+│   └── ThingsClient/          # JXAScriptsTests
+├── SchemaBaseline/            # schema-baseline.json (schema drift detection)
 ```
 
 ### Design Principles
@@ -136,41 +134,45 @@ import ClingsCore
 
 ## Testing Requirements
 
+### Database Path Resolution
+
+`ThingsDatabase` resolves its path in order:
+1. Explicit `databasePath` parameter (throws if file not found)
+2. `CLINGS_DB_PATH` environment variable (throws if file not found)
+3. Auto-discovery from Things 3 group container (falls back to JXA-only client)
+
 ### Test Categories
 
-**Unit Tests** - Test individual functions:
+**Unit Tests** - Test models, parsing, formatting:
 ```swift
-import XCTest
+import Testing
 @testable import ClingsCore
 
-final class TaskParserTests: XCTestCase {
-    func testParseDateTodayReturnsCurrentDate() {
+@Suite("TaskParser")
+struct TaskParserTests {
+    @Test func parseDateToday() {
         let result = TaskParser.parseDate("today")
-        XCTAssertEqual(result, Date().formatted(date: .numeric, time: .omitted))
+        #expect(result != nil)
     }
 }
 ```
 
-**Integration Tests** - Test CLI commands:
+**Database Integration Tests** - Test real SQLite queries using `TestDatabaseBuilder`:
 ```swift
-import XCTest
-
-final class CLIIntegrationTests: XCTestCase {
-    func testHelpFlagShowsUsage() throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: ".build/debug/clings")
-        process.arguments = ["--help"]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        try process.run()
-        process.waitUntilExit()
-
-        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
-        XCTAssertTrue(output?.contains("Things 3") == true)
-    }
-}
+let builder = try TestDatabaseBuilder()
+DatabaseTestFixtures.populate(builder)
+let db = try ThingsDatabase(databasePath: builder.path)
+let todos = try db.fetchList(.today)
 ```
+
+`TestDatabaseBuilder` creates a temp SQLite file with the exact Things 3 schema (all 41 TMTask columns, plus TMArea, TMTag, TMTaskTag, TMAreaTag, TMChecklistItem). No live Things 3 installation needed.
+
+**Schema Drift Tests** - Compare live Things 3 DB against `Tests/SchemaBaseline/schema-baseline.json`. Auto-skip in CI via `XCTSkip` when Things 3 is not installed. Run locally with:
+```bash
+swift test --filter SchemaDrift
+```
+
+If Things 3 updates its schema, run `scripts/update-schema-baseline.sh` after verifying compatibility.
 
 ### Coverage Requirements
 
@@ -222,6 +224,7 @@ Commands:
   show                   Show details of a todo by ID
   add                    Quick add with natural language
   complete, done         Mark a todo as completed
+  reopen                 Reopen a completed/canceled todo
   cancel                 Cancel a todo
   delete, rm             Delete a todo
   update                 Update a todo's properties
