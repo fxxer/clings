@@ -76,7 +76,7 @@ struct BulkCompleteCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
 
         // Get list view
         guard let listView = ListView(rawValue: list.lowercased()) else {
@@ -161,7 +161,7 @@ struct BulkCancelCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")
@@ -246,7 +246,7 @@ struct BulkTagCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")
@@ -293,7 +293,7 @@ struct BulkTagCommand: AsyncParsableCommand {
             for tag in tagList where !merged.contains(tag) {
                 merged.append(tag)
             }
-            try await client.updateTodo(id: todo.id, name: nil, notes: nil, dueDate: nil, tags: merged)
+            try await client.updateTodo(id: todo.id, name: nil, notes: nil, deadlineDate: nil, tags: merged)
         }
 
         print(formatter.format(message: "Updated \(todos.count) todo(s)"))
@@ -328,7 +328,7 @@ struct BulkMoveCommand: AsyncParsableCommand {
     var list: String = "today"
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
 
         guard let listView = ListView(rawValue: list.lowercased()) else {
             throw ThingsError.invalidState("Unknown list: \(list)")

@@ -52,7 +52,7 @@ struct FilterCommand: AsyncParsableCommand {
 
     func run() async throws {
         let filter = try FilterParser.parse(expression)
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
 
         // Fetch all open todos and filter
         var todos: [Todo] = []

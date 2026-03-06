@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Releasing version $TAG"
+
+      - name: Validate version matches source
+        run: |
+          SOURCE_VERSION=$(grep -o 'version: "[^"]*"' Sources/ClingsCLI/Clings.swift | head -1 | sed 's/version: "//;s/"//')
+          if [ "$SOURCE_VERSION" != "${{ steps.version.outputs.tag }}" ]; then
+            echo "ERROR: Tag v${{ steps.version.outputs.tag }} does not match Clings.swift version \"$SOURCE_VERSION\""
+            exit 1
+          fi
+
+      - name: Build release binary
+        run: swift build -c release --disable-sandbox
+
+      - name: Run tests
+        run: swift test
+
+      - name: Prepare binary
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          cp .build/release/clings "clings-${VERSION}-macos-arm64"
+
+      - name: Extract changelog
+        id: changelog
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          BODY=$(awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found" CHANGELOG.md)
+          if [ -z "$BODY" ]; then
+            BODY="Release v${VERSION}"
+          fi
+          # Write to file to avoid shell escaping issues
+          echo "$BODY" > /tmp/release-notes.md
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          gh release create "v${VERSION}" \
+            --title "v${VERSION}" \
+            --notes-file /tmp/release-notes.md \
+            "clings-${VERSION}-macos-arm64"
+
+      - name: Update Homebrew tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_PAT }}
+        run: |
+          VERSION="${{ steps.version.outputs.tag }}"
+          TARBALL_URL="https://github.com/drewburchfield/clings/archive/refs/tags/v${VERSION}.tar.gz"
+          SHA256=$(curl -sL "$TARBALL_URL" | shasum -a 256 | awk '{print $1}')
+
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/drewburchfield/homebrew-tap.git" /tmp/homebrew-tap
+          cd /tmp/homebrew-tap
+
+          sed -i '' "s|url \"https://github.com/drewburchfield/clings/archive/refs/tags/v.*\.tar\.gz\"|url \"${TARBALL_URL}\"|" Formula/clings.rb
+          sed -i '' "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/clings.rb
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/clings.rb
+          git commit -m "clings ${VERSION}"
+          git push

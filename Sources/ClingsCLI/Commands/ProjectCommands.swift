@@ -48,7 +48,7 @@ struct ProjectListCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let projects = try await client.fetchProjects()
 
         let formatter: OutputFormatter = output.json
@@ -102,7 +102,7 @@ struct ProjectAddCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Project title cannot be empty")
         }
 
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let parsedWhen = try when.map { try parseWhenDate($0) }
         let parsedDeadline = try deadline.map { try parseWhenDate($0) }
         let tagList = tags?
@@ -170,7 +170,7 @@ struct ProjectHeadingsCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let headings = try await client.fetchHeadings(projectId: project)
 
         let formatter: OutputFormatter = output.json

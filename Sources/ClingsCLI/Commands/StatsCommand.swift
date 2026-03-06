@@ -230,8 +230,8 @@ struct StatsCollector {
         // Overdue
         let todayStart = Calendar.current.startOfDay(for: Date())
         let overdue = allOpen.filter { todo in
-            guard let due = todo.dueDate else { return false }
-            return due < todayStart
+            guard let deadline = todo.deadlineDate else { return false }
+            return deadline < todayStart
         }.count
 
         // Completion rate

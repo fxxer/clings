@@ -94,6 +94,11 @@ struct CommandConfigurationTests {
             #expect(config.commandName == "cancel")
         }
 
+        @Test func reopenCommand() {
+            let config = ReopenCommand.configuration
+            #expect(config.commandName == "reopen")
+        }
+
         @Test func deleteCommand() {
             let config = DeleteCommand.configuration
             #expect(config.commandName == "delete")

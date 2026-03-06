@@ -10,8 +10,8 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
     private let database: ThingsDatabase
     private let jxaBridge: JXABridge
 
-    public init() throws {
-        self.database = try ThingsDatabase()
+    public init(databasePath: String? = nil) throws {
+        self.database = try ThingsDatabase(databasePath: databasePath)
         self.jxaBridge = JXABridge()
     }
 
@@ -136,6 +136,14 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         }
     }
 
+    public func reopenTodo(id: String) async throws {
+        let script = JXAScripts.reopenTodo(id: id)
+        let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+        if !result.success {
+            throw ThingsError.operationFailed(result.error ?? "Unknown error")
+        }
+    }
+
     public func cancelTodo(id: String) async throws {
         let script = JXAScripts.cancelTodo(id: id)
         let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
@@ -160,10 +168,9 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         }
     }
 
-    public func updateTodo(id: String, name: String?, notes: String?, dueDate: Date?, tags: [String]?) async throws {
-        // Handle non-tag updates via JXA (name, notes, dueDate work fine)
-        if name != nil || notes != nil || dueDate != nil {
-            let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: dueDate, tags: nil)
+    public func updateTodo(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws {
+        if name != nil || notes != nil || deadlineDate != nil {
+            let script = JXAScripts.updateTodo(id: id, name: name, notes: notes, dueDate: deadlineDate, tags: nil)
             let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
             if !result.success {
                 throw ThingsError.operationFailed(result.error ?? "Unknown error")
@@ -230,11 +237,17 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
 /// Factory to create the appropriate Things client.
 public enum ThingsClientFactory {
     /// Create a Things client - tries hybrid first, falls back to JXA-only.
-    public static func create() -> any ThingsClientProtocol {
+    ///
+    /// When an explicit `databasePath` is provided, failure is thrown rather
+    /// than silently falling back to JXA-only. Auto-discovery failures still
+    /// fall back gracefully.
+    public static func create(databasePath: String? = nil) throws -> any ThingsClientProtocol {
+        if databasePath != nil {
+            return try HybridThingsClient(databasePath: databasePath)
+        }
         do {
             return try HybridThingsClient()
         } catch {
-            // Fall back to JXA-only client if database not available
             return ThingsClient()
         }
     }

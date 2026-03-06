@@ -25,7 +25,7 @@ protocol ListCommand: AsyncParsableCommand {
 
 extension ListCommand {
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let todos = try await client.fetchList(listView)
 
         let formatter: OutputFormatter = output.json
@@ -232,7 +232,7 @@ struct ProjectsCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let projects = try await client.fetchProjects()
 
         let formatter: OutputFormatter = output.json
@@ -268,7 +268,7 @@ struct AreasCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let areas = try await client.fetchAreas()
 
         let formatter: OutputFormatter = output.json
@@ -315,7 +315,7 @@ struct RecentCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Invalid period '\(period)'. Use format: 3d, 1w, 2m")
         }
 
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let todos = try await client.fetchRecent(since: since)
 
         let formatter: OutputFormatter = output.json

@@ -9,7 +9,7 @@
 - **License:** GNU General Public License v3.0 (GPLv3)
 - **Platform:** macOS only (requires Things 3 installed)
 - **Technology:** Swift + SQLite (reads) + JavaScript for Automation (JXA) via `osascript` (writes)
-- **Version:** 0.2.1
+- **Version:** 0.3.0
 
 ## Build & Run
 
@@ -46,23 +46,21 @@ This approach provides:
 
 ```
 Sources/
-├── clings/
-│   └── main.swift           # Entry point
+├── ClingsCLI/
+│   └── Commands/              # Command implementations (AddCommand, ListCommands, etc.)
 ├── ClingsCore/
-│   ├── CLI/
-│   │   ├── Commands/        # Command implementations
-│   │   └── CLIApp.swift     # ArgumentParser setup
-│   ├── Database/
-│   │   └── ThingsDatabase.swift  # SQLite access
-│   ├── JXA/
-│   │   └── ThingsJXA.swift  # JXA script execution
-│   ├── Models/
-│   │   └── Todo.swift       # Data types
-│   ├── NLP/
-│   │   └── TaskParser.swift # Natural language parsing
-│   └── Output/
-│       ├── PrettyPrinter.swift
-│       └── JSONOutput.swift
+│   ├── Config/                # Auth token storage
+│   ├── Filter/                # Filter DSL parser and expression evaluator
+│   ├── Models/                # Todo, Project, Area, Tag, ChecklistItem, Status
+│   ├── NLP/                   # Natural language task parsing
+│   ├── Output/                # OutputFormatter (pretty + JSON)
+│   ├── ThingsClient/          # ThingsDatabase (SQLite), JXAScripts, HybridThingsClient
+│   └── Utils/                 # ThingsDateConverter, SchemaIntrospector
+Tests/
+├── ClingsCoreTests/
+│   ├── Database/              # ThingsDatabaseTests, SchemaDriftTests, TestDatabaseBuilder
+│   └── ThingsClient/          # JXAScriptsTests
+├── SchemaBaseline/            # schema-baseline.json (schema drift detection)
 ```
 
 ### Design Principles
@@ -136,41 +134,45 @@ import ClingsCore
 
 ## Testing Requirements
 
+### Database Path Resolution
+
+`ThingsDatabase` resolves its path in order:
+1. Explicit `databasePath` parameter (throws if file not found)
+2. `CLINGS_DB_PATH` environment variable (throws if file not found)
+3. Auto-discovery from Things 3 group container (falls back to JXA-only client)
+
 ### Test Categories
 
-**Unit Tests** - Test individual functions:
+**Unit Tests** - Test models, parsing, formatting:
 ```swift
-import XCTest
+import Testing
 @testable import ClingsCore
 
-final class TaskParserTests: XCTestCase {
-    func testParseDateTodayReturnsCurrentDate() {
+@Suite("TaskParser")
+struct TaskParserTests {
+    @Test func parseDateToday() {
         let result = TaskParser.parseDate("today")
-        XCTAssertEqual(result, Date().formatted(date: .numeric, time: .omitted))
+        #expect(result != nil)
     }
 }
 ```
 
-**Integration Tests** - Test CLI commands:
+**Database Integration Tests** - Test real SQLite queries using `TestDatabaseBuilder`:
 ```swift
-import XCTest
-
-final class CLIIntegrationTests: XCTestCase {
-    func testHelpFlagShowsUsage() throws {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: ".build/debug/clings")
-        process.arguments = ["--help"]
-
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        try process.run()
-        process.waitUntilExit()
-
-        let output = String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)
-        XCTAssertTrue(output?.contains("Things 3") == true)
-    }
-}
+let builder = try TestDatabaseBuilder()
+DatabaseTestFixtures.populate(builder)
+let db = try ThingsDatabase(databasePath: builder.path)
+let todos = try db.fetchList(.today)
 ```
+
+`TestDatabaseBuilder` creates a temp SQLite file with the exact Things 3 schema (all 41 TMTask columns, plus TMArea, TMTag, TMTaskTag, TMAreaTag, TMChecklistItem). No live Things 3 installation needed.
+
+**Schema Drift Tests** - Compare live Things 3 DB against `Tests/SchemaBaseline/schema-baseline.json`. Auto-skip in CI via `XCTSkip` when Things 3 is not installed. Run locally with:
+```bash
+swift test --filter SchemaDrift
+```
+
+If Things 3 updates its schema, run `scripts/update-schema-baseline.sh` after verifying compatibility.
 
 ### Coverage Requirements
 
@@ -222,6 +224,7 @@ Commands:
   show                   Show details of a todo by ID
   add                    Quick add with natural language
   complete, done         Mark a todo as completed
+  reopen                 Reopen a completed/canceled todo
   cancel                 Cancel a todo
   delete, rm             Delete a todo
   update                 Update a todo's properties
@@ -253,33 +256,23 @@ Every PR must pass:
 
 ### Release Process
 
-On tag push:
-1. Build release binaries (macOS ARM64, macOS x86_64)
-2. Generate shell completions
-3. Create GitHub release with artifacts
-4. Update Homebrew formula
+Releases are automated via GitHub Actions (`.github/workflows/release.yml`). The workflow triggers on tag push matching `v*` and handles building, testing, GitHub Release creation, and Homebrew tap updates.
 
-### Updating Homebrew Formula
+**To release a new version:**
 
-When releasing a new version:
+1. Update `version` in `Sources/ClingsCLI/Clings.swift`
+2. Add a `## [X.Y.Z]` section to `CHANGELOG.md`
+3. Commit and merge to main
+4. Run `scripts/release.sh X.Y.Z`
 
-1. **Get the SHA256 checksum** for the new release tarball:
-   ```bash
-   curl -sL https://github.com/dan-hart/clings/archive/refs/tags/v<VERSION>.tar.gz | shasum -a 256
-   ```
+The script validates your working tree, version match, and changelog entry, then creates an annotated tag and pushes it. GitHub Actions handles the rest:
+- Validates tag matches source version
+- Builds release binary (macOS ARM64)
+- Runs tests
+- Creates GitHub Release with changelog excerpt and binary
+- Updates `drewburchfield/homebrew-tap` Formula/clings.rb with new URL and SHA256
 
-2. **Update the formula** in the homebrew-tap repository:
-   - Repository: https://github.com/dan-hart/homebrew-tap
-   - File: `Formula/clings.rb`
-   - Update the `url` to point to the new version tag
-   - Update the `sha256` with the new checksum
-
-3. **Commit and push** the formula changes
-
-4. **Verify** the update works:
-   ```bash
-   brew update && brew upgrade clings
-   ```
+**Required secret:** `HOMEBREW_TAP_PAT` - fine-grained PAT scoped to `drewburchfield/homebrew-tap` with `Contents: Read and Write` permission. Set at `github.com/drewburchfield/clings/settings/secrets/actions`.
 
 ## Contributing
 
@@ -297,10 +290,4 @@ This project is licensed under the GNU General Public License v3.0 - see the [LI
 ## Claude Directives
 
 - Never add Claude as a co-author on commits
-- **Always update the Homebrew tap when releasing a new version:**
-  1. Update version in code
-  2. Commit, tag (e.g., `v0.2.1`), and push to all remotes
-  3. Get SHA256: `curl -sL https://github.com/dan-hart/clings/archive/refs/tags/v<VERSION>.tar.gz | shasum -a 256`
-  4. Update `~/Developer/homebrew-tap/Formula/clings.rb` with new version and SHA256
-  5. Commit and push homebrew-tap
-  6. Run `brew update && brew upgrade clings` to verify
+- **Releases are automated.** When releasing a new version, update the version in `Clings.swift` and `CHANGELOG.md`, commit, then run `scripts/release.sh <version>`. Do not manually update the Homebrew tap; the release workflow handles it.

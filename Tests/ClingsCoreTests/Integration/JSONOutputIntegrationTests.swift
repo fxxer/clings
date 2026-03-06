@@ -170,7 +170,7 @@ struct JSONOutputIntegrationTests {
             let todoNoDue = Todo(
                 id: "no-due",
                 name: "No due date",
-                dueDate: nil
+                deadlineDate: nil
             )
             let output = formatter.format(todos: [todoNoDue])
 
@@ -178,7 +178,7 @@ struct JSONOutputIntegrationTests {
             let json = try JSONSerialization.jsonObject(with: data) as! [String: Any]
             let items = json["items"] as! [[String: Any]]
 
-            #expect(items[0]["dueDate"] is NSNull || items[0]["dueDate"] == nil)
+            #expect(items[0]["deadlineDate"] is NSNull || items[0]["deadlineDate"] == nil)
         }
     }
 

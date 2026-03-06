@@ -53,7 +53,7 @@ struct TagsListCommand: AsyncParsableCommand {
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let tags = try await client.fetchTags()
 
         let formatter: OutputFormatter = output.json
@@ -92,7 +92,7 @@ struct TagsAddCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Tag name cannot be empty")
         }
 
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         let tag = try await client.createTag(name: trimmedName)
 
         let formatter: OutputFormatter = output.json
@@ -150,7 +150,7 @@ struct TagsDeleteCommand: AsyncParsableCommand {
             }
         }
 
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         try await client.deleteTag(name: trimmedName)
 
         let formatter: OutputFormatter = output.json
@@ -201,7 +201,7 @@ struct TagsRenameCommand: AsyncParsableCommand {
             throw ThingsError.invalidState("Old and new names are the same")
         }
 
-        let client = ThingsClientFactory.create()
+        let client = try ThingsClientFactory.create()
         try await client.renameTag(oldName: trimmedOld, newName: trimmedNew)
 
         let formatter: OutputFormatter = output.json

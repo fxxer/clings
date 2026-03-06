@@ -21,7 +21,7 @@ struct TaskParserTests {
             #expect(result.tags.isEmpty)
             #expect(result.project == nil)
             #expect(result.area == nil)
-            #expect(result.dueDate == nil)
+            #expect(result.deadlineDate == nil)
             #expect(result.whenDate == nil)
             #expect(result.checklistItems.isEmpty)
             #expect(result.priority == nil)
@@ -168,20 +168,20 @@ struct TaskParserTests {
 
         @Test func dueDateByDay() {
             let result = parser.parse("Submit report by friday")
-            #expect(result.dueDate != nil)
+            #expect(result.deadlineDate != nil)
             #expect(result.title == "Submit report")
         }
 
         @Test func dueDateByDayShort() {
             let result = parser.parse("Submit by fri")
-            #expect(result.dueDate != nil)
+            #expect(result.deadlineDate != nil)
         }
 
         @Test func dueDateWeekdays() {
             let days = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
             for day in days {
                 let result = parser.parse("Task by \(day)")
-                #expect(result.dueDate != nil, "Failed for \(day)")
+                #expect(result.deadlineDate != nil, "Failed for \(day)")
             }
         }
     }
@@ -288,7 +288,7 @@ struct TaskParserTests {
             #expect(result.project == "ProjectAlpha")
             #expect(result.tags == ["work"])
             #expect(result.priority == .high)
-            #expect(result.dueDate != nil)
+            #expect(result.deadlineDate != nil)
             #expect(result.notes == "Check formatting")
         }
 
@@ -298,7 +298,7 @@ struct TaskParserTests {
             #expect(result.tags.contains("urgent"))
             #expect(result.tags.contains("reporting"))
             #expect(result.priority == .high)
-            #expect(result.dueDate != nil)
+            #expect(result.deadlineDate != nil)
             #expect(result.checklistItems.count == 3)
             #expect(result.notes == "Q4 metrics")
         }
@@ -348,7 +348,7 @@ struct TaskParserTests {
                 tags: ["a", "b"],
                 project: "Project",
                 area: "Area",
-                dueDate: Date(),
+                deadlineDate: Date(),
                 whenDate: Date(),
                 checklistItems: ["Item 1"],
                 priority: .high
@@ -359,7 +359,7 @@ struct TaskParserTests {
             #expect(task.tags == ["a", "b"])
             #expect(task.project == "Project")
             #expect(task.area == "Area")
-            #expect(task.dueDate != nil)
+            #expect(task.deadlineDate != nil)
             #expect(task.whenDate != nil)
             #expect(task.checklistItems == ["Item 1"])
             #expect(task.priority == .high)
@@ -373,7 +373,7 @@ struct TaskParserTests {
             #expect(task.tags.isEmpty)
             #expect(task.project == nil)
             #expect(task.area == nil)
-            #expect(task.dueDate == nil)
+            #expect(task.deadlineDate == nil)
             #expect(task.whenDate == nil)
             #expect(task.checklistItems.isEmpty)
             #expect(task.priority == nil)

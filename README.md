@@ -96,7 +96,7 @@ clings filter "when < today"            # overdue scheduled todos
 
 **Filter operators:** `=`, `!=`, `<`, `>`, `<=`, `>=`, `LIKE`, `CONTAINS`, `IS NULL`, `IS NOT NULL`, `IN`
 **Logic:** `AND`, `OR`
-**Fields:** `status`, `due`, `tags`, `project`, `area`, `name`, `notes`, `created`, `when` (scheduled date)
+**Fields:** `status`, `due` / `deadline`, `tags`, `project`, `area`, `name`, `notes`, `created`, `startdate`, `recurring`, `when` (scheduled date)
 
 ### 4. Todo Management
 
@@ -121,6 +121,7 @@ clings update <ID> --when today --heading "In Progress"
 # Complete, cancel, or delete
 clings complete <ID>             # or: clings done <ID>
 clings complete --title "milk"   # complete by title search
+clings reopen <ID>               # reopen a completed/canceled todo
 clings cancel <ID>
 clings delete <ID>               # or: clings rm <ID>
 clings delete <ID> --force       # skip confirmation
@@ -245,6 +246,18 @@ The auth token is stored at `~/.config/clings/auth-token` with restricted permis
 
 ## Installation
 
+### Homebrew (Recommended)
+
+```bash
+brew install fxxer/tap/clings
+```
+
+To upgrade to the latest version:
+
+```bash
+brew update && brew upgrade clings
+```
+
 ### From Source
 
 ```bash
@@ -325,6 +338,7 @@ clings project --help
 | `add` | - | Add a new todo (supports `--heading`, `--checklist`) |
 | `update` | - | Update a todo's properties (supports `--when`, `--heading`) |
 | `complete` | `done` | Mark a todo as completed |
+| `reopen` | - | Reopen a completed/canceled todo |
 | `cancel` | - | Cancel a todo |
 | `delete` | `rm` | Delete a todo (moves to trash) |
 | `search` | `find`, `f` | Search todos by text |

@@ -8,7 +8,7 @@ import Foundation
 /// A project in Things 3.
 ///
 /// Projects are containers for related todos, with their own status,
-/// due date, and organizational placement (area).
+/// deadline, and organizational placement (area).
 public struct Project: Codable, Identifiable, Equatable, Hashable, Sendable {
     public let id: String
     public var name: String
@@ -16,7 +16,7 @@ public struct Project: Codable, Identifiable, Equatable, Hashable, Sendable {
     public var status: Status
     public var area: Area?
     public var tags: [Tag]
-    public var dueDate: Date?
+    public var deadlineDate: Date?
     public var creationDate: Date?
 
     public init(
@@ -26,7 +26,7 @@ public struct Project: Codable, Identifiable, Equatable, Hashable, Sendable {
         status: Status = .open,
         area: Area? = nil,
         tags: [Tag] = [],
-        dueDate: Date? = nil,
+        deadlineDate: Date? = nil,
         creationDate: Date? = nil
     ) {
         self.id = id
@@ -35,7 +35,7 @@ public struct Project: Codable, Identifiable, Equatable, Hashable, Sendable {
         self.status = status
         self.area = area
         self.tags = tags
-        self.dueDate = dueDate
+        self.deadlineDate = deadlineDate
         self.creationDate = creationDate
     }
 
@@ -46,7 +46,7 @@ public struct Project: Codable, Identifiable, Equatable, Hashable, Sendable {
         case status
         case area
         case tags
-        case dueDate
+        case deadlineDate = "dueDate"
         case creationDate
     }
 
@@ -65,7 +65,7 @@ public struct Project: Codable, Identifiable, Equatable, Hashable, Sendable {
 
         area = try container.decodeIfPresent(Area.self, forKey: .area)
         tags = try container.decodeIfPresent([Tag].self, forKey: .tags) ?? []
-        dueDate = try container.decodeIfPresent(Date.self, forKey: .dueDate)
+        deadlineDate = try container.decodeIfPresent(Date.self, forKey: .deadlineDate)
         creationDate = try container.decodeIfPresent(Date.self, forKey: .creationDate)
     }
 
