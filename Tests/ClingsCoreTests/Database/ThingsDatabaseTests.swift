@@ -81,7 +81,8 @@ final class ThingsDatabaseTests: XCTestCase {
         let ids = todos.map(\.id)
 
         XCTAssertTrue(ids.contains(DatabaseTestFixtures.anytimeTaskId))
-        XCTAssertTrue(ids.contains(DatabaseTestFixtures.todayTaskId))
+        // Today tasks (with startDate) should NOT appear in anytime
+        XCTAssertFalse(ids.contains(DatabaseTestFixtures.todayTaskId))
         // Upcoming (future startDate) should not appear
         XCTAssertFalse(ids.contains(DatabaseTestFixtures.upcomingTaskId))
         // Inbox excluded

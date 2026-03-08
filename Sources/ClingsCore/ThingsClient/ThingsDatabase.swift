@@ -114,7 +114,7 @@ public final class ThingsDatabase: Sendable {
                            rt1_repeatingTemplate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0
-                          AND (start = 1 OR startDate = ?)
+                          AND start = 1 AND startDate IS NOT NULL AND startDate <= ?
                     ORDER BY todayIndex, "index"
                     """
                 arguments = [todayPacked]
@@ -132,17 +132,16 @@ public final class ThingsDatabase: Sendable {
                 arguments = [todayPacked]
 
             case .anytime:
-                let todayPacked = ThingsDateConverter.encodeDate(Date())
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area, startDate,
                            rt1_repeatingTemplate
                     FROM TMTask
                     WHERE status = 0 AND trashed = 0 AND type = 0 AND start = 1
-                          AND (startDate IS NULL OR startDate <= ?)
+                          AND startDate IS NULL
                     ORDER BY "index"
                     """
-                arguments = [todayPacked]
+                arguments = []
 
             case .someday:
                 sql = """

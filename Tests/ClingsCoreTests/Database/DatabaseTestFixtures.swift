@@ -90,16 +90,16 @@ enum DatabaseTestFixtures {
             notes: "Check the failing tests", start: 0, index: 0
         )
 
-        // -- Today todo (start=1) --
+        // -- Today todo (start=1, startDate=today) --
         builder.addTask(
             uuid: todayTaskId, title: "Write tests",
-            start: 1, index: 0, todayIndex: 0
+            start: 1, startDate: todayPacked, index: 0, todayIndex: 0
         )
 
-        // -- Today via startDate == today --
+        // -- Today via startDate == today (also start=1) --
         builder.addTask(
             uuid: todayStartDateId, title: "Scheduled for today",
-            start: 0, startDate: todayPacked, index: 1, todayIndex: 1
+            start: 1, startDate: todayPacked, index: 1, todayIndex: 1
         )
 
         // -- Upcoming (startDate in future) --
