@@ -54,18 +54,9 @@ struct FilterCommand: AsyncParsableCommand {
         let filter = try FilterParser.parse(expression)
         let client = try ThingsClientFactory.create()
 
-        // Fetch all open todos and filter
-        var todos: [Todo] = []
-        for list in [ListView.today, .inbox, .upcoming, .anytime, .someday] {
-            let listTodos = try await client.fetchList(list)
-            todos.append(contentsOf: listTodos)
-        }
-
-        // Remove duplicates (same todo might appear in multiple lists)
-        let uniqueTodos = Array(Set(todos))
-
-        // Apply filter
-        let filtered = uniqueTodos.filter { filter.matches($0) }
+        // Fetch all open todos in a single pass and filter
+        let todos = try await client.fetchAllOpen()
+        let filtered = todos.filter { filter.matches($0) }
 
         let formatter: OutputFormatter = output.json
             ? JSONOutputFormatter()

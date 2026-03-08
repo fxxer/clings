@@ -5,6 +5,22 @@ All notable changes to clings will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-03-08
+
+### Fixed
+
+- **Today query correctness**: Fixed Today list returning all 1673 Anytime tasks instead of the correct 127. Query now properly filters by `start = 1 AND startDate <= today`.
+- **Anytime query correctness**: Fixed Anytime list including Today tasks. Now correctly shows only tasks with `startDate IS NULL`.
+- **JXA test suite**: Fixed 13 test failures where `createTodo` tests expected AppleScript format but implementation generates JXA.
+- **Force unwraps in JXAScripts**: Replaced fragile `name!.jxaEscaped` patterns with safe optional mapping.
+
+### Improved
+
+- **N+1 query elimination**: List fetches now use batch loading for tags, checklist items, projects, and areas (4 queries total instead of 4×N). ~80% fewer database queries for large lists.
+- **Filter command efficiency**: `clings filter` now uses a single `fetchAllOpen()` query instead of fetching from 5 separate lists sequentially.
+- **Logbook pagination**: `clings logbook --limit N` controls how many completed todos are returned (default: 500).
+- **Search pagination**: `clings search --limit N` controls result count (default: 100).
+
 ## [0.3.0] - 2026-03-02
 
 ### Added

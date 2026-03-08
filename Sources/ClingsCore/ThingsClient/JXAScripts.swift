@@ -317,9 +317,9 @@ public enum JXAScripts {
                 return JSON.stringify({ success: false, error: 'Todo not found' });
             }
 
-            \(name != nil ? "todo.name = '\(name!.jxaEscaped)';" : "")
-            \(notes != nil ? "todo.notes = '\(notes!.jxaEscaped)';" : "")
-            \(dueDateISO != nil ? "todo.dueDate = new Date('\(dueDateISO!)');" : "")
+            \(name.map { "todo.name = '\($0.jxaEscaped)';" } ?? "")
+            \(notes.map { "todo.notes = '\($0.jxaEscaped)';" } ?? "")
+            \(dueDateISO.map { "todo.dueDate = new Date('\($0)');" } ?? "")
 
             return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
         })()
@@ -349,12 +349,12 @@ public enum JXAScripts {
         return """
         (() => {
             const app = Application('Things3');
-            const props = { name: '\(name.jxaEscaped)'\(notes != nil ? ", notes: '\(notes!.jxaEscaped)'" : "")\(when != nil ? ", activationDate: new Date('\(when!.jxaEscaped)')" : "")\(deadline != nil ? ", dueDate: new Date('\(deadline!.jxaEscaped)')" : "") };
+            const props = { name: '\(name.jxaEscaped)'\(notes.map { ", notes: '\($0.jxaEscaped)'" } ?? "")\(when.map { ", activationDate: new Date('\($0.jxaEscaped)')" } ?? "")\(deadline.map { ", dueDate: new Date('\($0.jxaEscaped)')" } ?? "") };
 
             const todo = app.make({ new: 'to do', withProperties: props });
 
-            \(project != nil ? "const project = app.projects.byName('\(project!.jxaEscaped)'); if (project.exists()) { todo.project = project; }" : "")
-            \(area != nil ? "const area = app.areas.byName('\(area!.jxaEscaped)'); if (area.exists()) { todo.area = area; }" : "")
+            \(project.map { "const project = app.projects.byName('\($0.jxaEscaped)'); if (project.exists()) { todo.project = project; }" } ?? "")
+            \(area.map { "const area = app.areas.byName('\($0.jxaEscaped)'); if (area.exists()) { todo.area = area; }" } ?? "")
             \(checklistJS)
 
             return JSON.stringify({ success: true, id: todo.id(), name: todo.name() });
@@ -386,18 +386,18 @@ public enum JXAScripts {
             const project = app.make({ new: 'project', withProperties: props });
 
             // Set when date
-            \(whenISO != nil ? "project.activationDate = new Date('\(whenISO!)');" : "")
+            \(whenISO.map { "project.activationDate = new Date('\($0)');" } ?? "")
 
             // Set deadline
-            \(deadlineISO != nil ? "project.dueDate = new Date('\(deadlineISO!)');" : "")
+            \(deadlineISO.map { "project.dueDate = new Date('\($0)');" } ?? "")
 
             // Add to area
-            \(area != nil ? """
-            const area = app.areas.byName('\(area!.jxaEscaped)');
+            \(area.map { """
+            const area = app.areas.byName('\($0.jxaEscaped)');
             if (area.exists()) {
                 project.area = area;
             }
-            """ : "")
+            """ } ?? "")
 
             return JSON.stringify({
                 success: true,

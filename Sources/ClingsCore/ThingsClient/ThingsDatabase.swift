@@ -86,7 +86,8 @@ public final class ThingsDatabase: Sendable {
     // MARK: - List Queries
 
     /// Fetch todos from a specific list view.
-    public func fetchList(_ list: ListView) throws -> [Todo] {
+    /// - Parameter limit: Maximum number of results (applies to logbook, default 500).
+    public func fetchList(_ list: ListView, limit: Int? = nil) throws -> [Todo] {
         let db = try openDatabase()
 
         return try db.read { db in
@@ -155,6 +156,7 @@ public final class ThingsDatabase: Sendable {
                 arguments = []
 
             case .logbook:
+                let logbookLimit = limit ?? 500
                 sql = """
                     SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
                            userModificationDate, project, area, startDate,
@@ -162,9 +164,9 @@ public final class ThingsDatabase: Sendable {
                     FROM TMTask
                     WHERE status = 3 AND trashed = 0 AND type = 0
                     ORDER BY stopDate DESC
-                    LIMIT 500
+                    LIMIT ?
                     """
-                arguments = []
+                arguments = [logbookLimit]
 
             case .trash:
                 sql = """
@@ -179,9 +181,27 @@ public final class ThingsDatabase: Sendable {
             }
 
             let rows = try Row.fetchAll(db, sql: sql, arguments: arguments)
-            return try rows.map { row in
-                try self.todoFromRow(row, db: db)
-            }
+            return try self.todosFromRows(rows, db: db)
+        }
+    }
+
+    /// Fetch all open (non-completed, non-trashed) todos in a single query.
+    /// More efficient than fetching from each list separately.
+    public func fetchAllOpen() throws -> [Todo] {
+        let db = try openDatabase()
+
+        return try db.read { db in
+            let sql = """
+                SELECT uuid, title, notes, status, stopDate, deadline, creationDate,
+                       userModificationDate, project, area, startDate,
+                       rt1_repeatingTemplate
+                FROM TMTask
+                WHERE status = 0 AND trashed = 0 AND type = 0
+                ORDER BY todayIndex, "index"
+                """
+
+            let rows = try Row.fetchAll(db, sql: sql)
+            return try self.todosFromRows(rows, db: db)
         }
     }
 
@@ -328,14 +348,13 @@ public final class ThingsDatabase: Sendable {
                 """
 
             let rows = try Row.fetchAll(db, sql: sql, arguments: [sinceTimestamp])
-            return try rows.map { row in
-                try self.todoFromRow(row, db: db)
-            }
+            return try self.todosFromRows(rows, db: db)
         }
     }
 
     /// Search todos by text.
-    public func search(query: String) throws -> [Todo] {
+    /// - Parameter limit: Maximum number of results (default 100).
+    public func search(query: String, limit: Int = 100) throws -> [Todo] {
         let db = try openDatabase()
 
         return try db.read { db in
@@ -347,19 +366,19 @@ public final class ThingsDatabase: Sendable {
                 WHERE type = 0 AND trashed = 0
                       AND (title LIKE ? OR notes LIKE ?)
                 ORDER BY todayIndex, "index"
-                LIMIT 100
+                LIMIT ?
                 """
 
             let pattern = "%\(query)%"
-            let rows = try Row.fetchAll(db, sql: sql, arguments: [pattern, pattern])
-            return try rows.map { row in
-                try self.todoFromRow(row, db: db)
-            }
+            let rows = try Row.fetchAll(db, sql: sql, arguments: [pattern, pattern, limit])
+            return try self.todosFromRows(rows, db: db)
         }
     }
 
     // MARK: - Helper Methods
 
+    /// Convert a single row to a Todo, fetching related data individually.
+    /// Use `todosFromRows` for batch operations to avoid N+1 queries.
     private func todoFromRow(_ row: Row, db: Database) throws -> Todo {
         let uuid: String = row["uuid"]
         let title: String = row["title"]
@@ -373,6 +392,57 @@ public final class ThingsDatabase: Sendable {
         let tags = try fetchTagsForTask(uuid: uuid, db: db)
         let checklistItems = try fetchChecklistItems(uuid: uuid, db: db)
 
+        return buildTodo(row: row, uuid: uuid, title: title, notes: notes, statusInt: statusInt,
+                         project: project, area: area, tags: tags, checklistItems: checklistItems)
+    }
+
+    /// Batch convert rows to Todos, loading all related data in bulk.
+    /// Uses 4 queries total instead of 4×N individual queries.
+    private func todosFromRows(_ rows: [Row], db: Database) throws -> [Todo] {
+        guard !rows.isEmpty else { return [] }
+
+        // Collect all UUIDs and related IDs
+        var taskUuids: [String] = []
+        var projectUuids: Set<String> = []
+        var areaUuids: Set<String> = []
+
+        for row in rows {
+            let uuid: String = row["uuid"]
+            taskUuids.append(uuid)
+            if let projectUuid: String = row["project"] { projectUuids.insert(projectUuid) }
+            if let areaUuid: String = row["area"] { areaUuids.insert(areaUuid) }
+        }
+
+        // Batch fetch all related data
+        let tagsByTask = try batchFetchTagsForTasks(uuids: taskUuids, db: db)
+        let checklistByTask = try batchFetchChecklistItems(uuids: taskUuids, db: db)
+        let areasById = try batchFetchAreas(uuids: areaUuids, db: db)
+
+        // Batch fetch projects (which also need area resolution)
+        let projectsById = try batchFetchProjects(uuids: projectUuids, areasById: areasById, db: db)
+
+        // Assemble todos
+        return rows.map { row in
+            let uuid: String = row["uuid"]
+            let title: String = row["title"]
+            let notes: String? = row["notes"]
+            let statusInt: Int = row["status"]
+            let projectUuid: String? = row["project"]
+            let areaUuid: String? = row["area"]
+
+            let project = projectUuid.flatMap { projectsById[$0] }
+            let area = areaUuid.flatMap { areasById[$0] }
+            let tags = tagsByTask[uuid] ?? []
+            let checklistItems = checklistByTask[uuid] ?? []
+
+            return buildTodo(row: row, uuid: uuid, title: title, notes: notes, statusInt: statusInt,
+                             project: project, area: area, tags: tags, checklistItems: checklistItems)
+        }
+    }
+
+    private func buildTodo(row: Row, uuid: String, title: String, notes: String?,
+                           statusInt: Int, project: Project?, area: Area?,
+                           tags: [Tag], checklistItems: [ChecklistItem]) -> Todo {
         let deadline: Date? = (row["deadline"] as Int?).flatMap {
             ThingsDateConverter.decodeToDate($0)
         }
@@ -386,7 +456,6 @@ public final class ThingsDatabase: Sendable {
         let modificationDate: Date = (row["userModificationDate"] as Double?).flatMap {
             Date(timeIntervalSince1970: $0)
         } ?? creationDate
-        let scheduledDate: Date? = startDate
 
         return Todo(
             id: uuid,
@@ -402,9 +471,95 @@ public final class ThingsDatabase: Sendable {
             repeatingTemplate: repeatingTemplate,
             creationDate: creationDate,
             modificationDate: modificationDate,
-            scheduledDate: scheduledDate
+            scheduledDate: startDate
         )
     }
+
+    // MARK: - Batch Fetch Helpers
+
+    private func batchFetchTagsForTasks(uuids: [String], db: Database) throws -> [String: [Tag]] {
+        guard !uuids.isEmpty else { return [:] }
+        let placeholders = uuids.map { _ in "?" }.joined(separator: ",")
+        let sql = """
+            SELECT tt.tasks, tag.uuid, tag.title
+            FROM TMTaskTag AS tt
+            JOIN TMTag AS tag ON tt.tags = tag.uuid
+            WHERE tt.tasks IN (\(placeholders))
+            """
+        let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(uuids))
+        var result: [String: [Tag]] = [:]
+        for row in rows {
+            let taskUuid: String = row["tasks"]
+            let tag = Tag(id: row["uuid"], name: row["title"])
+            result[taskUuid, default: []].append(tag)
+        }
+        return result
+    }
+
+    private func batchFetchChecklistItems(uuids: [String], db: Database) throws -> [String: [ChecklistItem]] {
+        guard !uuids.isEmpty else { return [:] }
+        let placeholders = uuids.map { _ in "?" }.joined(separator: ",")
+        let sql = """
+            SELECT uuid, title, status, task
+            FROM TMChecklistItem
+            WHERE task IN (\(placeholders))
+            ORDER BY "index"
+            """
+        let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(uuids))
+        var result: [String: [ChecklistItem]] = [:]
+        for row in rows {
+            let taskUuid: String = row["task"]
+            let item = ChecklistItem(
+                id: row["uuid"],
+                name: row["title"],
+                completed: (row["status"] as Int) == 3
+            )
+            result[taskUuid, default: []].append(item)
+        }
+        return result
+    }
+
+    private func batchFetchAreas(uuids: Set<String>, db: Database) throws -> [String: Area] {
+        guard !uuids.isEmpty else { return [:] }
+        let uuidArray = Array(uuids)
+        let placeholders = uuidArray.map { _ in "?" }.joined(separator: ",")
+        let sql = "SELECT uuid, title FROM TMArea WHERE uuid IN (\(placeholders))"
+        let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(uuidArray))
+        var result: [String: Area] = [:]
+        for row in rows {
+            let uuid: String = row["uuid"]
+            result[uuid] = Area(id: uuid, name: row["title"], tags: [])
+        }
+        return result
+    }
+
+    private func batchFetchProjects(uuids: Set<String>, areasById: [String: Area],
+                                     db: Database) throws -> [String: Project] {
+        guard !uuids.isEmpty else { return [:] }
+        let uuidArray = Array(uuids)
+        let placeholders = uuidArray.map { _ in "?" }.joined(separator: ",")
+        let sql = "SELECT uuid, title, status, area FROM TMTask WHERE uuid IN (\(placeholders)) AND type = 1"
+        let rows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(uuidArray))
+        var result: [String: Project] = [:]
+        for row in rows {
+            let uuid: String = row["uuid"]
+            let areaUuid: String? = row["area"]
+            let area = areaUuid.flatMap { areasById[$0] }
+            result[uuid] = Project(
+                id: uuid,
+                name: row["title"],
+                notes: nil,
+                status: statusFromInt(row["status"]),
+                area: area,
+                tags: [],
+                deadlineDate: nil,
+                creationDate: nil
+            )
+        }
+        return result
+    }
+
+    // MARK: - Single-item Fetch Helpers (used by fetchTodo)
 
     private func fetchProjectBasic(uuid: String, db: Database) throws -> Project? {
         let sql = "SELECT title, status, area FROM TMTask WHERE uuid = ? AND type = 1"

@@ -179,7 +179,7 @@ struct SomedayCommand: ListCommand {
 
 // MARK: - Logbook Command
 
-struct LogbookCommand: ListCommand {
+struct LogbookCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "logbook",
         abstract: "Show completed todos",
@@ -193,8 +193,9 @@ struct LogbookCommand: ListCommand {
         - Generating reports
 
         EXAMPLES:
-          clings logbook                Show completed todos
+          clings logbook                Show completed todos (last 500)
           clings l                      Alias for 'logbook'
+          clings logbook --limit 1000   Show more results
           clings logbook --json         Output as JSON
 
         SEE ALSO:
@@ -203,9 +204,25 @@ struct LogbookCommand: ListCommand {
         aliases: ["l"]
     )
 
+    @Option(name: .long, help: "Maximum number of results (default: 500)")
+    var limit: Int = 500
+
     @OptionGroup var output: OutputOptions
 
-    var listView: ListView { .logbook }
+    func run() async throws {
+        let client = try ThingsClientFactory.create()
+        let todos = try await client.fetchList(.logbook, limit: limit)
+
+        let formatter: OutputFormatter = output.json
+            ? JSONOutputFormatter()
+            : TextOutputFormatter(useColors: !output.noColor)
+
+        if output.json {
+            print(formatter.format(todos: todos, list: "Logbook"))
+        } else {
+            print(formatter.format(todos: todos))
+        }
+    }
 }
 
 // MARK: - Projects Command

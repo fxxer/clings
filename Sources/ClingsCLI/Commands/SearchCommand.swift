@@ -32,11 +32,14 @@ struct SearchCommand: AsyncParsableCommand {
     @Argument(help: "The search query")
     var query: String
 
+    @Option(name: .long, help: "Maximum number of results (default: 100)")
+    var limit: Int = 100
+
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
         let client = try ThingsClientFactory.create()
-        let todos = try await client.search(query: query)
+        let todos = try await client.search(query: query, limit: limit)
 
         let formatter: OutputFormatter = output.json
             ? JSONOutputFormatter()

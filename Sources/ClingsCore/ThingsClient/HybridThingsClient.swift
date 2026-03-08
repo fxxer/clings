@@ -17,8 +17,12 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
 
     // MARK: - Reads (via SQLite - fast)
 
-    public func fetchList(_ list: ListView) async throws -> [Todo] {
-        try database.fetchList(list)
+    public func fetchList(_ list: ListView, limit: Int? = nil) async throws -> [Todo] {
+        try database.fetchList(list, limit: limit)
+    }
+
+    public func fetchAllOpen() async throws -> [Todo] {
+        try database.fetchAllOpen()
     }
 
     public func fetchProjects() async throws -> [Project] {
@@ -45,8 +49,8 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         try database.fetchRecent(since: since)
     }
 
-    public func search(query: String) async throws -> [Todo] {
-        try database.search(query: query)
+    public func search(query: String, limit: Int = 100) async throws -> [Todo] {
+        try database.search(query: query, limit: limit)
     }
 
     // MARK: - Writes (via JXA - safe)

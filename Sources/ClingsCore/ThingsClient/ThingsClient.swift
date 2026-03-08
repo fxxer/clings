@@ -31,11 +31,14 @@ public enum ThingsError: Error, LocalizedError {
 /// This protocol allows for mocking in tests.
 public protocol ThingsClientProtocol: Sendable {
     // Lists
-    func fetchList(_ list: ListView) async throws -> [Todo]
+    func fetchList(_ list: ListView, limit: Int?) async throws -> [Todo]
     func fetchProjects() async throws -> [Project]
     func fetchAreas() async throws -> [Area]
     func fetchTags() async throws -> [Tag]
     func fetchHeadings(projectId: String) async throws -> [Heading]
+
+    // All open todos (for filtering)
+    func fetchAllOpen() async throws -> [Todo]
 
     // Recent
     func fetchRecent(since: Date) async throws -> [Todo]
@@ -70,7 +73,7 @@ public protocol ThingsClientProtocol: Sendable {
     func updateTodo(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws
 
     // Search
-    func search(query: String) async throws -> [Todo]
+    func search(query: String, limit: Int) async throws -> [Todo]
 
     // Tag management
     func createTag(name: String) async throws -> Tag
@@ -80,6 +83,16 @@ public protocol ThingsClientProtocol: Sendable {
     // Open (disabled)
     func openInThings(id: String) throws
     func openInThings(list: ListView) throws
+}
+
+extension ThingsClientProtocol {
+    public func fetchList(_ list: ListView) async throws -> [Todo] {
+        try await fetchList(list, limit: nil)
+    }
+
+    public func search(query: String) async throws -> [Todo] {
+        try await search(query: query, limit: 100)
+    }
 }
 
 /// Result from a mutation operation.
@@ -115,13 +128,22 @@ public actor ThingsClient: ThingsClientProtocol {
 
     // MARK: - Lists
 
-    public func fetchList(_ list: ListView) async throws -> [Todo] {
+    public func fetchList(_ list: ListView, limit: Int? = nil) async throws -> [Todo] {
         let script = JXAScripts.fetchList(list.displayName)
         do {
             return try await bridge.executeJSON(script, as: [Todo].self)
         } catch let error as JXAError {
             throw ThingsError.jxaError(error)
         }
+    }
+
+    public func fetchAllOpen() async throws -> [Todo] {
+        var todos: [Todo] = []
+        for list in [ListView.today, .inbox, .upcoming, .anytime, .someday] {
+            let listTodos = try await fetchList(list)
+            todos.append(contentsOf: listTodos)
+        }
+        return todos
     }
 
     public func fetchProjects() async throws -> [Project] {
@@ -328,7 +350,7 @@ public actor ThingsClient: ThingsClientProtocol {
 
     // MARK: - Search
 
-    public func search(query: String) async throws -> [Todo] {
+    public func search(query: String, limit: Int = 100) async throws -> [Todo] {
         let script = JXAScripts.search(query: query)
         do {
             return try await bridge.executeJSON(script, as: [Todo].self)

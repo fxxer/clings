@@ -70,10 +70,19 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
 
     // MARK: - ThingsClientProtocol Implementation
 
-    func fetchList(_ list: ListView) async throws -> [Todo] {
+    func fetchList(_ list: ListView, limit: Int? = nil) async throws -> [Todo] {
         if let error = errorToThrow { throw error }
         fetchedLists.append(list)
         return todosForList[list] ?? []
+    }
+
+    func fetchAllOpen() async throws -> [Todo] {
+        if let error = errorToThrow { throw error }
+        var todos: [Todo] = []
+        for list in [ListView.today, .inbox, .upcoming, .anytime, .someday] {
+            todos.append(contentsOf: todosForList[list] ?? [])
+        }
+        return todos
     }
 
     func fetchProjects() async throws -> [Project] {
@@ -172,7 +181,7 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         updateOperations.append((id, name, notes, deadlineDate, tags))
     }
 
-    func search(query: String) async throws -> [Todo] {
+    func search(query: String, limit: Int = 100) async throws -> [Todo] {
         if let error = errorToThrow { throw error }
         searchQueries.append(query)
         return searchResults
