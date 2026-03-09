@@ -62,3 +62,6 @@ backup/
 
 # Local docs and plans
 docs/
+
+# Claude Code session memory
+memory/

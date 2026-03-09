@@ -65,23 +65,26 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
-        let whenStr = when.map { iso8601DateString($0) }
-        let deadlineStr = deadline.map { iso8601DateString($0) }
-
-        let script = JXAScripts.createTodo(
+        let script = JXAScripts.createTodoAppleScript(
             name: name,
             notes: notes,
-            when: whenStr,
-            deadline: deadlineStr,
-            tags: [],
+            when: when,
+            deadline: deadline,
             project: project,
             area: area,
             checklistItems: checklistItems
         )
 
-        let result = try await jxaBridge.executeJSON(script, as: CreationResult.self)
-        guard result.success, let id = result.id, !id.isEmpty else {
-            throw ThingsError.operationFailed(result.error ?? "Missing created todo ID")
+        let id: String
+        do {
+            id = try await jxaBridge.executeAppleScript(script)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch let error as JXAError {
+            throw ThingsError.jxaError(error)
+        }
+
+        guard !id.isEmpty else {
+            throw ThingsError.operationFailed("Failed to create todo - no ID returned")
         }
 
         if !tags.isEmpty {
@@ -191,6 +194,25 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
         }
     }
 
+    public func updateProject(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws {
+        if name != nil || notes != nil || deadlineDate != nil {
+            let script = JXAScripts.updateProject(id: id, name: name, notes: notes, dueDate: deadlineDate)
+            let result = try await jxaBridge.executeJSON(script, as: MutationResult.self)
+            if !result.success {
+                throw ThingsError.operationFailed(result.error ?? "Unknown error")
+            }
+        }
+
+        if let tags = tags {
+            let tagScript = JXAScripts.setProjectTagsAppleScript(id: id, tags: tags)
+            do {
+                _ = try await jxaBridge.executeAppleScript(tagScript)
+            } catch let error as JXAError {
+                throw ThingsError.jxaError(error)
+            }
+        }
+    }
+
     // MARK: - Tag Management
 
     public func createTag(name: String) async throws -> Tag {
@@ -230,22 +252,21 @@ public final class HybridThingsClient: ThingsClientProtocol, @unchecked Sendable
     public nonisolated func openInThings(list: ListView) throws {
         throw ThingsError.invalidState("Open command is disabled: URL schemes are not allowed.")
     }
-
-    private func iso8601DateString(_ date: Date) -> String {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter.string(from: date)
-    }
 }
 
 /// Factory to create the appropriate Things client.
 public enum ThingsClientFactory {
+    /// Override client for testing. When set, `create()` returns this instead.
+    nonisolated(unsafe) public static var override: (any ThingsClientProtocol)?
+
     /// Create a Things client - tries hybrid first, falls back to JXA-only.
     ///
     /// When an explicit `databasePath` is provided, failure is thrown rather
     /// than silently falling back to JXA-only. Auto-discovery failures still
     /// fall back gracefully.
     public static func create(databasePath: String? = nil) throws -> any ThingsClientProtocol {
+        if let override { return override }
+
         if databasePath != nil {
             return try HybridThingsClient(databasePath: databasePath)
         }

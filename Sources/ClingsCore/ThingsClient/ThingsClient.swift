@@ -71,6 +71,7 @@ public protocol ThingsClientProtocol: Sendable {
     func deleteTodo(id: String) async throws
     func moveTodo(id: String, toProject: String) async throws
     func updateTodo(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws
+    func updateProject(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws
 
     // Search
     func search(query: String, limit: Int) async throws -> [Todo]
@@ -222,23 +223,26 @@ public actor ThingsClient: ThingsClientProtocol {
         area: String?,
         checklistItems: [String]
     ) async throws -> String {
-        let whenStr = when.map { iso8601DateString($0) }
-        let deadlineStr = deadline.map { iso8601DateString($0) }
-
-        let script = JXAScripts.createTodo(
+        let script = JXAScripts.createTodoAppleScript(
             name: name,
             notes: notes,
-            when: whenStr,
-            deadline: deadlineStr,
-            tags: [],
+            when: when,
+            deadline: deadline,
             project: project,
             area: area,
             checklistItems: checklistItems
         )
 
-        let result = try await bridge.executeJSON(script, as: CreationResult.self)
-        guard result.success, let id = result.id, !id.isEmpty else {
-            throw ThingsError.operationFailed(result.error ?? "Missing created todo ID")
+        let id: String
+        do {
+            id = try await bridge.executeAppleScript(script)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        } catch let error as JXAError {
+            throw ThingsError.jxaError(error)
+        }
+
+        guard !id.isEmpty else {
+            throw ThingsError.operationFailed("Failed to create todo - no ID returned")
         }
 
         if !tags.isEmpty {
@@ -340,6 +344,25 @@ public actor ThingsClient: ThingsClientProtocol {
 
         if let tags = tags {
             let tagScript = JXAScripts.setTodoTagsAppleScript(id: id, tags: tags)
+            do {
+                _ = try await bridge.executeAppleScript(tagScript)
+            } catch let error as JXAError {
+                throw ThingsError.jxaError(error)
+            }
+        }
+    }
+
+    public func updateProject(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws {
+        if name != nil || notes != nil || deadlineDate != nil {
+            let script = JXAScripts.updateProject(id: id, name: name, notes: notes, dueDate: deadlineDate)
+            let result = try await bridge.executeJSON(script, as: MutationResult.self)
+            if !result.success {
+                throw ThingsError.operationFailed(result.error ?? "Unknown error")
+            }
+        }
+
+        if let tags = tags {
+            let tagScript = JXAScripts.setProjectTagsAppleScript(id: id, tags: tags)
             do {
                 _ = try await bridge.executeAppleScript(tagScript)
             } catch let error as JXAError {

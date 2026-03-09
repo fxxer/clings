@@ -284,49 +284,51 @@ struct JXAScriptsTests {
         // URL scheme tests would require integration testing with Things 3.
     }
 
-    @Suite("Create Todo Script (JXA)")
+    @Suite("Create Todo Script (AppleScript)")
     struct CreateTodoScript {
         @Test func withName() {
-            let script = JXAScripts.createTodo(name: "New Task")
-            #expect(script.contains("Application('Things3')"))
-            #expect(script.contains("app.make("))
-            #expect(script.contains("name: 'New Task'"))
+            let script = JXAScripts.createTodoAppleScript(name: "New Task")
+            #expect(script.contains("tell application \"Things3\""))
+            #expect(script.contains("make new to do with properties"))
+            #expect(script.contains("name:\"New Task\""))
         }
 
         @Test func withNotes() {
-            let script = JXAScripts.createTodo(name: "Task", notes: "Some notes")
-            #expect(script.contains("notes: 'Some notes'"))
-        }
-
-        @Test func withTags() {
-            let script = JXAScripts.createTodo(name: "Task", tags: ["tag1", "tag2"])
-            // Tags are applied separately via AppleScript, not in the create script.
-            #expect(!script.contains("tag1"))
-            #expect(!script.contains("tag2"))
+            let script = JXAScripts.createTodoAppleScript(name: "Task", notes: "Some notes")
+            #expect(script.contains("notes:\"Some notes\""))
         }
 
         @Test func withProject() {
-            let script = JXAScripts.createTodo(name: "Task", project: "My Project")
-            #expect(script.contains("app.projects.byName('My Project')"))
-            #expect(script.contains("todo.project = project"))
+            let script = JXAScripts.createTodoAppleScript(name: "Task", project: "My Project")
+            #expect(script.contains("set project of newTodo to project \"My Project\""))
         }
 
         @Test func withArea() {
-            let script = JXAScripts.createTodo(name: "Task", area: "Work Area")
-            #expect(script.contains("app.areas.byName('Work Area')"))
-            #expect(script.contains("todo.area = area"))
+            let script = JXAScripts.createTodoAppleScript(name: "Task", area: "Work Area")
+            #expect(script.contains("set area of newTodo to area \"Work Area\""))
         }
 
         @Test func withChecklistItems() {
-            let script = JXAScripts.createTodo(name: "Task", checklistItems: ["Step 1", "Step 2"])
-            #expect(script.contains("'Step 1'"))
-            #expect(script.contains("'Step 2'"))
+            let script = JXAScripts.createTodoAppleScript(name: "Task", checklistItems: ["Step 1", "Step 2"])
+            #expect(script.contains("name:\"Step 1\""))
+            #expect(script.contains("name:\"Step 2\""))
         }
 
         @Test func returnsId() {
-            let script = JXAScripts.createTodo(name: "Task")
-            #expect(script.contains("todo.id()"))
-            #expect(script.contains("success: true"))
+            let script = JXAScripts.createTodoAppleScript(name: "Task")
+            #expect(script.contains("return id of newTodo"))
+        }
+
+        @Test func withDeadline() {
+            let date = Date()
+            let script = JXAScripts.createTodoAppleScript(name: "Task", deadline: date)
+            #expect(script.contains("set due date of newTodo to deadlineDate"))
+        }
+
+        @Test func withWhen() {
+            let date = Date()
+            let script = JXAScripts.createTodoAppleScript(name: "Task", when: date)
+            #expect(script.contains("set activation date of newTodo to whenDate"))
         }
     }
 
@@ -385,10 +387,16 @@ struct JXAScriptsTests {
             }
         }
 
-        @Test func createTodoIsJXA() {
-            let script = JXAScripts.createTodo(name: "Task")
+        @Test func createTodoIsAppleScript() {
+            let script = JXAScripts.createTodoAppleScript(name: "Task")
+            #expect(script.contains("tell application \"Things3\""))
+            #expect(script.contains("make new to do with properties"))
+        }
+
+        @Test func updateProjectIsJXA() {
+            let script = JXAScripts.updateProject(id: "proj-1", name: "New Name")
             #expect(script.contains("Application('Things3')"))
-            #expect(script.contains("app.make("))
+            #expect(script.contains("app.projects.byId"))
         }
     }
 }

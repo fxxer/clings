@@ -326,40 +326,95 @@ public enum JXAScripts {
         """
     }
 
-    /// Create a new todo with the given properties via AppleScript.
-    public static func createTodo(
-        name: String,
+    /// Update a project's properties via JXA.
+    public static func updateProject(
+        id: String,
+        name: String? = nil,
         notes: String? = nil,
-        when: String? = nil,
-        deadline: String? = nil,
-        tags: [String] = [],
-        project: String? = nil,
-        area: String? = nil,
-        checklistItems: [String] = []
+        dueDate: Date? = nil
     ) -> String {
-        _ = tags  // Tags are applied separately via AppleScript.
-
-        let checklistJS = checklistItems.isEmpty ? "" : """
-            const checklistItems = [\(checklistItems.map { "'\($0.jxaEscaped)'" }.joined(separator: ", "))];
-            checklistItems.forEach(function(itemName) {
-                app.make({ new: 'to do', withProperties: { name: itemName }, at: todo.toDos });
-            });
-            """
+        let dueDateISO = dueDate.map { ISO8601DateFormatter().string(from: $0) }
 
         return """
         (() => {
             const app = Application('Things3');
-            const props = { name: '\(name.jxaEscaped)'\(notes.map { ", notes: '\($0.jxaEscaped)'" } ?? "")\(when.map { ", activationDate: new Date('\($0.jxaEscaped)')" } ?? "")\(deadline.map { ", dueDate: new Date('\($0.jxaEscaped)')" } ?? "") };
+            const project = app.projects.byId('\(id.jxaEscaped)');
 
-            const todo = app.make({ new: 'to do', withProperties: props });
+            if (!project.exists()) {
+                return JSON.stringify({ success: false, error: 'Project not found' });
+            }
 
-            \(project.map { "const project = app.projects.byName('\($0.jxaEscaped)'); if (project.exists()) { todo.project = project; }" } ?? "")
-            \(area.map { "const area = app.areas.byName('\($0.jxaEscaped)'); if (area.exists()) { todo.area = area; }" } ?? "")
-            \(checklistJS)
+            \(name.map { "project.name = '\($0.jxaEscaped)';" } ?? "")
+            \(notes.map { "project.notes = '\($0.jxaEscaped)';" } ?? "")
+            \(dueDateISO.map { "project.dueDate = new Date('\($0)');" } ?? "")
 
-            return JSON.stringify({ success: true, id: todo.id(), name: todo.name() });
+            return JSON.stringify({ success: true, id: '\(id.jxaEscaped)' });
         })()
         """
+    }
+
+    /// Create a new todo via AppleScript (JXA `make` throws -2710 in Things 3).
+    /// Returns the ID of the created todo.
+    public static func createTodoAppleScript(
+        name: String,
+        notes: String? = nil,
+        when: Date? = nil,
+        deadline: Date? = nil,
+        project: String? = nil,
+        area: String? = nil,
+        checklistItems: [String] = []
+    ) -> String {
+        var propsList = ["name:\"\(name.appleScriptEscaped)\""]
+        if let notes = notes {
+            propsList.append("notes:\"\(notes.appleScriptEscaped)\"")
+        }
+
+        var lines: [String] = []
+        lines.append("tell application \"Things3\"")
+        lines.append("    set newTodo to make new to do with properties {\(propsList.joined(separator: ", "))}")
+
+        if let when = when {
+            lines.append(contentsOf: dateSettingLines(property: "activation date", of: "newTodo", date: when, tempVar: "whenDate"))
+        }
+        if let deadline = deadline {
+            lines.append(contentsOf: dateSettingLines(property: "due date", of: "newTodo", date: deadline, tempVar: "deadlineDate"))
+        }
+        if let project = project {
+            lines.append("    try")
+            lines.append("        set project of newTodo to project \"\(project.appleScriptEscaped)\"")
+            lines.append("    end try")
+        }
+        if let area = area {
+            lines.append("    try")
+            lines.append("        set area of newTodo to area \"\(area.appleScriptEscaped)\"")
+            lines.append("    end try")
+        }
+        for item in checklistItems {
+            lines.append("    tell newTodo")
+            lines.append("        make new to do with properties {name:\"\(item.appleScriptEscaped)\"}")
+            lines.append("    end tell")
+        }
+
+        lines.append("    return id of newTodo")
+        lines.append("end tell")
+
+        return lines.joined(separator: "\n")
+    }
+
+    /// Generate AppleScript lines to set a date property from a Swift Date.
+    private static func dateSettingLines(property: String, of variable: String, date: Date, tempVar: String) -> [String] {
+        let calendar = Calendar.current
+        let y = calendar.component(.year, from: date)
+        let m = calendar.component(.month, from: date)
+        let d = calendar.component(.day, from: date)
+        return [
+            "    set \(tempVar) to current date",
+            "    set year of \(tempVar) to \(y)",
+            "    set month of \(tempVar) to \(m)",
+            "    set day of \(tempVar) to \(d)",
+            "    set time of \(tempVar) to 0",
+            "    set \(property) of \(variable) to \(tempVar)",
+        ]
     }
 
     /// Create a new project with the given properties.

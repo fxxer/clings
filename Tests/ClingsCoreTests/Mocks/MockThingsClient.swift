@@ -181,6 +181,14 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         updateOperations.append((id, name, notes, deadlineDate, tags))
     }
 
+    /// Track project update operations.
+    private(set) var projectUpdateOperations: [(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?)] = []
+
+    func updateProject(id: String, name: String?, notes: String?, deadlineDate: Date?, tags: [String]?) async throws {
+        if let error = errorToThrow { throw error }
+        projectUpdateOperations.append((id, name, notes, deadlineDate, tags))
+    }
+
     func search(query: String, limit: Int = 100) async throws -> [Todo] {
         if let error = errorToThrow { throw error }
         searchQueries.append(query)
@@ -240,6 +248,7 @@ final class MockThingsClient: ThingsClientProtocol, @unchecked Sendable {
         openedLists = []
         createdTodos = []
         createdProjects = []
+        projectUpdateOperations = []
         createdTags = []
         deletedTags = []
         renamedTags = []

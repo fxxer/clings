@@ -30,6 +30,7 @@ struct ProjectCommand: AsyncParsableCommand {
         subcommands: [
             ProjectListCommand.self,
             ProjectAddCommand.self,
+            ProjectUpdateCommand.self,
             ProjectHeadingsCommand.self,
         ],
         defaultSubcommand: ProjectListCommand.self
@@ -144,6 +145,89 @@ struct ProjectAddCommand: AsyncParsableCommand {
             return date
         }
         throw ThingsError.invalidState("Invalid date format: \(str). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
+    }
+}
+
+// MARK: - Project Update Command
+
+struct ProjectUpdateCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "update",
+        abstract: "Update a project's properties",
+        discussion: """
+        Update one or more properties of a project by ID.
+        Only specified options will be updated.
+
+        EXAMPLES:
+          clings project update <uuid> --name "New Title"
+          clings project update <uuid> --notes "Updated notes"
+          clings project update <uuid> --deadline 2025-06-01
+          clings project update <uuid> --tags work,planning
+        """
+    )
+
+    @Argument(help: "The ID of the project to update")
+    var id: String
+
+    @Option(name: .long, help: "New name for the project")
+    var name: String?
+
+    @Option(name: .long, help: "New notes for the project")
+    var notes: String?
+
+    @Option(name: .long, help: "New deadline date (YYYY-MM-DD or 'today', 'tomorrow')")
+    var deadline: String?
+
+    @Option(name: .long, parsing: .upToNextOption, help: "New tags (replaces existing)")
+    var tags: [String] = []
+
+    @OptionGroup var output: OutputOptions
+
+    func run() async throws {
+        guard name != nil || notes != nil || deadline != nil || !tags.isEmpty else {
+            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --deadline, or --tags.")
+        }
+
+        let client = try ThingsClientFactory.create()
+
+        var deadlineDate: Date? = nil
+        if let deadlineStr = deadline {
+            deadlineDate = parseDate(deadlineStr)
+            if deadlineDate == nil {
+                throw ThingsError.invalidState("Invalid date format: \(deadlineStr). Use YYYY-MM-DD, 'today', or 'tomorrow'.")
+            }
+        }
+
+        try await client.updateProject(
+            id: id,
+            name: name,
+            notes: notes,
+            deadlineDate: deadlineDate,
+            tags: tags.isEmpty ? nil : tags
+        )
+
+        let formatter: OutputFormatter = output.json
+            ? JSONOutputFormatter()
+            : TextOutputFormatter(useColors: !output.noColor)
+
+        print(formatter.format(message: "Updated project: \(id)"))
+    }
+
+    private func parseDate(_ str: String) -> Date? {
+        let calendar = Calendar.current
+        let now = Date()
+        let lower = str.lowercased()
+
+        if lower == "today" {
+            return calendar.startOfDay(for: now)
+        }
+        if lower == "tomorrow" {
+            return calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now))
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter.date(from: str)
     }
 }
 
