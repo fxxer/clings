@@ -223,6 +223,7 @@ struct UpdateCommand: AsyncParsableCommand {
           clings update ABC123 --deadline 2024-12-25
           clings update ABC123 --when tomorrow
           clings update ABC123 --heading "Waiting on them"
+          clings update ABC123 --project "📍 Week #12"
           clings update ABC123 --tags work,urgent
         """
     )
@@ -245,6 +246,9 @@ struct UpdateCommand: AsyncParsableCommand {
     @Option(name: .long, help: "Move to a heading within the task's project. Requires auth token.")
     var heading: String?
 
+    @Option(name: .long, help: "Move to a different project (by name)")
+    var project: String?
+
     @Option(name: .long, parsing: .upToNextOption, help: "New tags (replaces existing)")
     var tags: [String] = []
 
@@ -252,8 +256,8 @@ struct UpdateCommand: AsyncParsableCommand {
 
     func run() async throws {
         // Check if any update options provided
-        guard name != nil || notes != nil || deadline != nil || when != nil || heading != nil || !tags.isEmpty else {
-            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --deadline, --when, --heading, or --tags.")
+        guard name != nil || notes != nil || deadline != nil || when != nil || heading != nil || project != nil || !tags.isEmpty else {
+            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --deadline, --when, --heading, --project, or --tags.")
         }
 
         // Validate --when value if provided
@@ -325,6 +329,11 @@ struct UpdateCommand: AsyncParsableCommand {
             )
         }
 
+        // Move to project via JXA (separate from other updates)
+        if let projectName = project {
+            try await client.moveTodo(id: id, toProject: projectName)
+        }
+
         // Handle when and heading via Things URL scheme (activationDate is read-only in JXA)
         if needsURLScheme, let token = prevalidatedToken {
             do {
@@ -346,8 +355,9 @@ struct UpdateCommand: AsyncParsableCommand {
             ? JSONOutputFormatter()
             : TextOutputFormatter(useColors: !output.noColor)
 
+        let projectNote = project != nil ? " (moved to project '\(project!)')" : ""
         let urlSchemeNote = needsURLScheme ? " (--when/--heading sent via URL scheme; verify in Things)" : ""
-        print(formatter.format(message: "Updated todo: \(id)\(urlSchemeNote)"))
+        print(formatter.format(message: "Updated todo: \(id)\(projectNote)\(urlSchemeNote)"))
     }
 
     private func parseDate(_ str: String) -> Date? {
