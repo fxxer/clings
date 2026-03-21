@@ -210,6 +210,35 @@ struct ArgumentParsingTests {
             #expect(command.when == "today")
             #expect(command.heading == "In Progress")
         }
+
+        @Test func checklistItemsOption() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--checklist-items", "Step 1", "Step 2", "Step 3"])
+            #expect(command.checklistItems == ["Step 1", "Step 2", "Step 3"])
+            #expect(command.appendChecklistItems.isEmpty)
+            #expect(command.prependChecklistItems.isEmpty)
+        }
+
+        @Test func appendChecklistItemsOption() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--append-checklist-items", "Extra step"])
+            #expect(command.appendChecklistItems == ["Extra step"])
+            #expect(command.checklistItems.isEmpty)
+        }
+
+        @Test func prependChecklistItemsOption() throws {
+            let command = try UpdateCommand.parse(["JKL012", "--prepend-checklist-items", "First step"])
+            #expect(command.prependChecklistItems == ["First step"])
+            #expect(command.checklistItems.isEmpty)
+        }
+
+        @Test func checklistWithOtherOptions() throws {
+            let command = try UpdateCommand.parse([
+                "JKL012",
+                "--name", "Updated",
+                "--append-checklist-items", "Item A", "Item B",
+            ])
+            #expect(command.name == "Updated")
+            #expect(command.appendChecklistItems == ["Item A", "Item B"])
+        }
     }
 
     @Suite("Add Command")
