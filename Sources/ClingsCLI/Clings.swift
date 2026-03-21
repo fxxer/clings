@@ -27,7 +27,7 @@ struct Clings: AsyncParsableCommand {
         For more information on a specific command, run:
           clings <command> --help
         """,
-        version: "0.3.1",
+        version: "0.3.2",
         subcommands: [
             // List views
             TodayCommand.self,

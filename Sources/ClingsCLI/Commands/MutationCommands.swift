@@ -225,6 +225,9 @@ struct UpdateCommand: AsyncParsableCommand {
           clings update ABC123 --heading "Waiting on them"
           clings update ABC123 --project "📍 Week #12"
           clings update ABC123 --tags work,urgent
+          clings update ABC123 --checklist-items "Step 1" "Step 2"
+          clings update ABC123 --append-checklist-items "Extra step"
+          clings update ABC123 --prepend-checklist-items "First step"
         """
     )
 
@@ -252,12 +255,29 @@ struct UpdateCommand: AsyncParsableCommand {
     @Option(name: .long, parsing: .upToNextOption, help: "New tags (replaces existing)")
     var tags: [String] = []
 
+    @Option(name: .customLong("checklist-items"), parsing: .upToNextOption, help: "Replace all checklist items. Requires auth token.")
+    var checklistItems: [String] = []
+
+    @Option(name: .customLong("append-checklist-items"), parsing: .upToNextOption, help: "Append checklist items to existing list. Requires auth token.")
+    var appendChecklistItems: [String] = []
+
+    @Option(name: .customLong("prepend-checklist-items"), parsing: .upToNextOption, help: "Prepend checklist items to existing list. Requires auth token.")
+    var prependChecklistItems: [String] = []
+
     @OptionGroup var output: OutputOptions
 
     func run() async throws {
+        let hasChecklistUpdates = !checklistItems.isEmpty || !appendChecklistItems.isEmpty || !prependChecklistItems.isEmpty
+
         // Check if any update options provided
-        guard name != nil || notes != nil || deadline != nil || when != nil || heading != nil || project != nil || !tags.isEmpty else {
-            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --deadline, --when, --heading, --project, or --tags.")
+        guard name != nil || notes != nil || deadline != nil || when != nil || heading != nil || project != nil || !tags.isEmpty || hasChecklistUpdates else {
+            throw ThingsError.invalidState("No update options provided. Use --name, --notes, --deadline, --when, --heading, --project, --tags, --checklist-items, --append-checklist-items, or --prepend-checklist-items.")
+        }
+
+        // Validate checklist: only one mode at a time
+        let checklistModes = [!checklistItems.isEmpty, !appendChecklistItems.isEmpty, !prependChecklistItems.isEmpty].filter { $0 }.count
+        if checklistModes > 1 {
+            throw ThingsError.invalidState("Use only one of --checklist-items, --append-checklist-items, or --prepend-checklist-items at a time.")
         }
 
         // Validate --when value if provided
@@ -288,14 +308,14 @@ struct UpdateCommand: AsyncParsableCommand {
         }
 
         // Pre-validate auth token before any mutations to avoid partial updates
-        let needsURLScheme = when != nil || resolvedHeading != nil
+        let needsURLScheme = when != nil || resolvedHeading != nil || hasChecklistUpdates
         var prevalidatedToken: String? = nil
         if needsURLScheme {
             do {
                 prevalidatedToken = try AuthTokenStore.loadToken()
             } catch let error as CocoaError where error.code == .fileReadNoSuchFile {
                 throw ThingsError.invalidState(
-                    "Things auth token required for --when/--heading. Set with: clings config set-auth-token <token>"
+                    "Things auth token required for --when/--heading/--checklist-items. Set with: clings config set-auth-token <token>"
                 )
             } catch let error as ThingsError {
                 throw error
@@ -334,17 +354,29 @@ struct UpdateCommand: AsyncParsableCommand {
             try await client.moveTodo(id: id, toProject: projectName)
         }
 
-        // Handle when and heading via Things URL scheme (activationDate is read-only in JXA)
+        // Handle when, heading, and checklist via Things URL scheme (activationDate is read-only in JXA)
         if needsURLScheme, let token = prevalidatedToken {
+            // Determine checklist mode
+            let checklistParam: (name: String, items: [String])?
+            if !checklistItems.isEmpty {
+                checklistParam = ("checklist-items", checklistItems)
+            } else if !appendChecklistItems.isEmpty {
+                checklistParam = ("append-checklist-items", appendChecklistItems)
+            } else if !prependChecklistItems.isEmpty {
+                checklistParam = ("prepend-checklist-items", prependChecklistItems)
+            } else {
+                checklistParam = nil
+            }
+
             do {
-                try updateViaURLScheme(id: id, when: when, heading: resolvedHeading, token: token)
+                try updateViaURLScheme(id: id, when: when, heading: resolvedHeading, checklist: checklistParam, token: token)
             } catch {
                 if hasJXAUpdates {
                     let jxaFields = [name != nil ? "name" : nil, notes != nil ? "notes" : nil,
                                    deadlineDate != nil ? "deadline" : nil, !tags.isEmpty ? "tags" : nil]
                         .compactMap { $0 }.joined(separator: ", ")
                     throw ThingsError.operationFailed(
-                        "Partial update: \(jxaFields) updated, but --when/--heading failed: \(error.localizedDescription)"
+                        "Partial update: \(jxaFields) updated, but URL scheme update failed: \(error.localizedDescription)"
                     )
                 }
                 throw error
@@ -356,7 +388,7 @@ struct UpdateCommand: AsyncParsableCommand {
             : TextOutputFormatter(useColors: !output.noColor)
 
         let projectNote = project != nil ? " (moved to project '\(project!)')" : ""
-        let urlSchemeNote = needsURLScheme ? " (--when/--heading sent via URL scheme; verify in Things)" : ""
+        let urlSchemeNote = needsURLScheme ? " (URL scheme updates sent; verify in Things)" : ""
         print(formatter.format(message: "Updated todo: \(id)\(projectNote)\(urlSchemeNote)"))
     }
 
@@ -378,7 +410,7 @@ struct UpdateCommand: AsyncParsableCommand {
         return formatter.date(from: str)
     }
 
-    private func updateViaURLScheme(id: String, when: String?, heading: String?, token: String) throws {
+    private func updateViaURLScheme(id: String, when: String?, heading: String?, checklist: (name: String, items: [String])?, token: String) throws {
         var queryItems = [
             URLQueryItem(name: "auth-token", value: token),
             URLQueryItem(name: "id", value: id),
@@ -388,6 +420,9 @@ struct UpdateCommand: AsyncParsableCommand {
         }
         if let heading = heading {
             queryItems.append(URLQueryItem(name: "heading", value: heading))
+        }
+        if let checklist = checklist {
+            queryItems.append(URLQueryItem(name: checklist.name, value: checklist.items.joined(separator: "\n")))
         }
 
         guard var components = URLComponents(string: "things:///update") else {
